@@ -1,0 +1,110 @@
+;    HookMan - System Hook Manager for TI-83+ Series.
+;    Copyright (C) 2007  Andy Janata
+;
+;    This program is free software; you can redistribute it and/or modify
+;    it under the terms of the GNU General Public License as published by
+;    the Free Software Foundation; either version 2 of the License, or
+;    (at your option) any later version.
+;
+;    This program is distributed in the hope that it will be useful,
+;    but WITHOUT ANY WARRANTY; without even the implied warranty of
+;    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;    GNU General Public License for more details.
+;
+;    You should have received a copy of the GNU General Public License along
+;    with this program; if not, write to the Free Software Foundation, Inc.,
+;    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+;
+;	  You can contact the author via electronic mail at <ajanata@gmail.com>,
+;	  or by writing to Andy Janata, 178 E. 5th St., Bewster, OH 44613 USA.
+;
+;
+;	You should use Spencer's Assembler (spasm) to assemble this. It may or
+;	may not work in other assemblers.
+;	Wabbitsign is recommended to generate the .8xk file.
+
+
+; TI-83+ Applications are run in the second memory bank, from $4000 to $7FFF.
+.org $4000
+; The 128-byte header required of all applications. Contains name and version
+; information.
+#include "header.inc"
+; The standard include file, modified slightly for use with this assembler.
+#include "ti83plus.inc"
+
+
+start:
+	; put initialization stuff her
+menu:
+	bcall(_ClrLCDFull)
+	set textInverse,(iy+textFlags)
+	ld hl,titleHookman
+	call PutS
+	res textInverse,(iy+textFlags)
+	
+	ld hl,$0905
+	ld (penCol),hl		; sets both penCol and penRow at the same time
+	ld hl,menuNumbers+(3*1)
+	call VPutS
+	ld hl,$1005
+	ld (penCol),hl
+	ld hl,menuNumbers+(3*2)
+	call VPutS
+	ld hl,$1705
+	ld (penCol),hl
+	ld hl,menuNumbers+(3*3)
+	call VPutS
+	ld hl,$1E05
+	ld (penCol),hl
+	ld hl,menuNumbers+(3*4)
+	call VPutS
+	ld hl,$2505
+	ld (penCol),hl
+	ld hl,menuNumbers+(3*5)
+	call VPutS
+
+
+
+	bcall(_GetKey)
+	bjump(_JForceCmd)
+
+
+; Since these include executable code, they cannot be included at the start of
+; the app, otherwise the code in them would be executed when the app is started!
+
+; General subroutines (ie, string printing, variable management, etc.).
+#include "routines.z80"
+
+
+; Constant data (user interface strings, variable names, etc.).
+#include "strings.inc"
+
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	
