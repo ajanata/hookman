@@ -16,7 +16,7 @@
 ;    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 ;
 ;	  You can contact the author via electronic mail at <ajanata@gmail.com>,
-;	  or by writing to Andy Janata, 178 E. 5th St., Bewster, OH 44613 USA.
+;	  or by writing to Andy Janata, 178 E. 5th St., Brewster, OH 44613 USA.
 
 
 
@@ -30,12 +30,18 @@ titleInstall:
 	.db "    Install     ",0
 titleAdvanced:
 	.db "    Advanced    ",0
+titleHelp:
+	.db "      Help      ",0
 	
+itemUninstall:	.db "Uninstall",0
 itemInstall:	.db "Install",0
 itemAdvanced:	.db "Advanced",0
 itemHelp			.db "Help",0
 itemAbout		.db "About",0
 itemExit			.db "Exit",0
+itemBack			.db "Back",0
+
+txtCopyright	.db "Copyright (",$FF,"c) '07 Andy Janata",0
 	
 menuNumbers:
 	.db "0)",0

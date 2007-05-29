@@ -16,7 +16,7 @@
 ;    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 ;
 ;	  You can contact the author via electronic mail at <ajanata@gmail.com>,
-;	  or by writing to Andy Janata, 178 E. 5th St., Bewster, OH 44613 USA.
+;	  or by writing to Andy Janata, 178 E. 5th St., Brewster, OH 44613 USA.
 
 ;Field: Program length
 	.DB 080h,0Fh
@@ -36,7 +36,7 @@
 ;Field: App Name
 	.DB 080h,048h
 ;App Name = APPNAME
-	.DB "HookMan "
+	.DB "AHookMan"
 ;Field: App Pages
 	.DB 080h,081h
 ;App Pages = 1

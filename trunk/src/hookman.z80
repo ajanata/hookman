@@ -16,7 +16,7 @@
 ;    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 ;
 ;	  You can contact the author via electronic mail at <ajanata@gmail.com>,
-;	  or by writing to Andy Janata, 178 E. 5th St., Bewster, OH 44613 USA.
+;	  or by writing to Andy Janata, 178 E. 5th St., Brewster, OH 44613 USA.
 ;
 ;
 ;	You should use Spencer's Assembler (spasm) to assemble this. It may or
@@ -34,10 +34,12 @@
 
 
 start:
-	; put initialization stuff her
-menu:
+	; put initialization stuff here
+mainMenu:
 	bcall(_ClrLCDFull)
 	set textInverse,(iy+textFlags)
+	ld hl,$0000
+	ld (curRow),hl
 	ld hl,titleHookman
 	call PutS
 	res textInverse,(iy+textFlags)
@@ -60,16 +62,80 @@ menu:
 	call VPutS
 	ld hl,$2505
 	ld (penCol),hl
-	ld hl,menuNumbers+(3*5)
+	ld hl,menuNumbers+(3*0)
 	call VPutS
 
+	; put the text after the numbers
+	ld hl,$0910
+	ld (penCol),hl
+	ld hl,itemInstall
+	call VPutS
+	ld hl,$1010
+	ld (penCol),hl
+	ld hl,itemAdvanced
+	call VPutS
+	ld hl,$1710
+	ld (penCol),hl
+	ld hl,itemHelp
+	call VPutS
+	ld hl,$1E10
+	ld (penCol),hl
+	ld hl,itemAbout
+	call VPutS
+	ld hl,$2510
+	ld (penCol),hl
+	ld hl,itemExit
+	call VPutS
+	
+	; copyright string
+	ld hl,$3900
+	ld (penCol),hl
+	ld hl,txtCopyright
+	call VPutSC
 
 
+	; key input loop
+	; kclear, kquit, k0-k4
+_:
 	bcall(_GetKey)
-	bjump(_JForceCmd)
+	cp kClear
+	jr z,exit
+	cp kQuit
+	jr z,exit
+	sub k0
+	jr z,exit
+	dec a
+	jr z,InstallUninstall
+	dec a
+	jr z,advancedMenu
+	dec a
+	jr z,helpMenu
+	dec a
+	jr z,About
+	jp -_
 
 
-; Since these include executable code, they cannot be included at the start of
+InstallUninstall:
+advancedMenu:
+helpMenu:
+About:
+	; stub for keys for the time being
+mainMenuStub:
+	bcall(_ClrLCDFull)
+	ld hl,$0000
+	ld (curRow),hl
+	ld hl,asdf
+	call PutS
+	bcall(_GetKey)
+	jp mainMenu
+
+asdf: .db "Not implemented",0
+
+exit:
+	bjump(_JForceCmdNoChar)
+
+
+; Since these include executable code or data, they cannot be included at the start of
 ; the app, otherwise the code in them would be executed when the app is started!
 
 ; General subroutines (ie, string printing, variable management, etc.).
