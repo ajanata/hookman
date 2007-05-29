@@ -16,7 +16,7 @@
 ;    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 ;
 ;	  You can contact the author via electronic mail at <ajanata@gmail.com>,
-;	  or by writing to Andy Janata, 178 E. 5th St., Bewster, OH 44613 USA.
+;	  or by writing to Andy Janata, 178 E. 5th St., Brewster, OH 44613 USA.
 
 
 ;	PutS: Prints a null-terminated string to the home screen in the large font
@@ -26,7 +26,7 @@
 ;		 (curCol): column to start printing string
 ;	OUT: (hl): byte after the null
 ;	DESTROYS: a
-PutSNL:
+_:
 	bcall(_NewLine)
 PutS:
 	ld a,(hl)
@@ -34,7 +34,7 @@ PutS:
 	or a
 	ret z
 	cp $D6
-	jr z,PutSNL
+	jr z,-_
 	bcall(_PutC)
 	jr PutS
 	
@@ -53,3 +53,21 @@ VPutS:
 	bcall(_VPutMap)
 	jr VPutS
 	
+
+;	VPutSC: Same as VPutS but allows a string to be "compressed" by introducing a
+;		backspace character ($FF). VPutS is a few ticks faster, so should be used
+;		when this isn't needed.
+;	IN/OUT/DESTROYS: See VPutS.
+_:
+	ld a,(penCol)
+	dec a
+	ld (penCol),a
+VPutSC:
+	ld a,(hl)
+	inc hl
+	or a
+	ret z
+	cp $FF
+	jr z,-_
+	bcall(_VPutMap)
+	jr VPutSC
