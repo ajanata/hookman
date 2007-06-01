@@ -15,8 +15,8 @@
 ;    with this program; if not, write to the Free Software Foundation, Inc.,
 ;    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 ;
-;	  You can contact the author via electronic mail at <ajanata@gmail.com>,
-;	  or by writing to Andy Janata, 178 E. 5th St., Brewster, OH 44613 USA.
+;	 You can contact the author via electronic mail at <ajanata@gmail.com>,
+;	 or by writing to Andy Janata, 178 E. 5th St., Brewster, OH 44613 USA.
 
 
 ;	PutS: Prints a null-terminated string to the home screen in the large font
