@@ -1,0 +1,195 @@
+;    HookMan - System Hook Manager for TI-83+ Series.
+;    Copyright (C) 2007  Andy Janata
+;
+;    This program is free software; you can redistribute it and/or modify
+;    it under the terms of the GNU General Public License as published by
+;    the Free Software Foundation; either version 2 of the License, or
+;    (at your option) any later version.
+;
+;    This program is distributed in the hope that it will be useful,
+;    but WITHOUT ANY WARRANTY; without even the implied warranty of
+;    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;    GNU General Public License for more details.
+;
+;    You should have received a copy of the GNU General Public License along
+;    with this program; if not, write to the Free Software Foundation, Inc.,
+;    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+;
+;	 You can contact the author via electronic mail at <ajanata@gmail.com>,
+;	 or by writing to Andy Janata, 178 E. 5th St., Brewster, OH 44613 USA.
+
+
+;	This file contains HookMan's implementaion of every hook. These are just
+;	stubs which stick a number into b (after pushing bc to the stack) and jump
+;	to a unified hook handler.
+
+;9B78 - Link Activity Hook
+hookLinkActivity:
+	.db $83
+	push bc
+	ld b,LinkActivityHook
+	jp doHook
+
+;9B7C - Cursor Hook
+hookCursor:
+	.db $83
+	push bc
+	ld b,CursorHook
+	jp doHook
+	
+;9B84 - Raw Key Hook
+hookRawKey:
+	.db $83
+	push bc
+	ld b,RawKeyHook
+	jp doHook
+	
+;9B88 - GetCSC Hook
+hookGetCSC:
+	.db $83
+	push bc
+	ld b,GetCSCHook
+	jp doHook
+	
+;9B8C - Homescreen Hook
+hookHomescreen:
+	.db $83
+	push bc
+	ld b,HomescreenHook
+	jp doHook
+	
+;9B90 - Window Hook
+hookWindow:
+	.db $83
+	push bc
+	ld b,WindowHook
+	jp doHook
+	
+;9B94 - Graph Hook
+hookGraph:
+	.db $83
+	push bc
+	ld b,GraphHook
+	jp doHook
+	
+;9B98 - Y= Hook
+hookYEqu:
+	.db $83
+	push bc
+	ld b,YEquHook
+	jp doHook
+	
+;9B9C - Font Hook
+hookFont:
+	.db $83
+	push bc
+	ld b,FontHook
+	jp doHook
+	
+;9BA0 - Regraph Hook
+hookRegraph:
+	.db $83
+	push bc
+	ld b,RegraphHook
+	jp doHook
+	
+;9BA4 - Graphics Hook
+hookGraphics:
+	.db $83
+	push bc
+	ld b,GraphicsHook
+	jp doHook
+	
+;9BA8 - Trace Hook
+hookTrace:
+	.db $83
+	push bc
+	ld b,TraceHook
+	jp doHook
+	
+;9BAC - Parser Hook
+hookParser:
+	.db $83
+	push bc
+	ld b,ParserHook
+	jp doHook
+	
+;9BB0 - App Change Hook
+hookAppChange:
+	.db $83
+	push bc
+	ld b,AppChangeHook
+	jp doHook
+	
+;9BB4 - Catalog 1 Hook
+hookCatalog1:
+	.db $83
+	push bc
+	ld b,Catalog1Hook
+	jp doHook
+	
+;9BB8 - Help Hook
+hookHelp:
+	.db $83
+	push bc
+	ld b,HelpHook
+	jp doHook
+	
+;9BBC - cxRedisp Hook
+hookcxRedisp:
+	.db $83
+	push bc
+	ld b,cxRedispHook
+	jp doHook
+	
+;9BC0 - Menu Hook
+hookMenu:
+	.db $83
+	push bc
+	ld b,MenuHook
+	jp doHook
+	
+;9BC4 - Catalog 2 Hook
+hookCatalog2:
+	.db $83
+	push bc
+	ld b,Catalog2Hook
+	jp doHook
+	
+;9BC8 - Token Hook
+hookToken:
+	.db $83
+	push bc
+	ld b,TokenHook
+	jp doHook
+	
+;9BCC - Localize Hook
+hookLocalize:
+	.db $83
+	push bc
+	ld b,LocalizeHook
+	jp doHook
+	
+;9BD0 - Silent Link Hook
+hookSilentLink:
+	.db $83
+	push bc
+	ld b,SilentLinkHook
+	jp doHook
+	
+;9BD4 - USB Activity Hook
+hookUSBActivity:
+	.db $83
+	push bc
+	ld b,USBActivityHook
+	jp doHook
+	
+
+
+;	Actually process the hook.
+;	IN: b: Hook identification number (see defines in hooklist.inc).
+;	   top of stack: Old bc to pass to the real hook.
+doHook:
+	; this dummy hook will not work for all of the different hooks!
+	pop bc
+	ret

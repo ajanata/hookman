@@ -15,8 +15,8 @@
 ;    with this program; if not, write to the Free Software Foundation, Inc.,
 ;    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 ;
-;	  You can contact the author via electronic mail at <ajanata@gmail.com>,
-;	  or by writing to Andy Janata, 178 E. 5th St., Brewster, OH 44613 USA.
+;	 You can contact the author via electronic mail at <ajanata@gmail.com>,
+;	 or by writing to Andy Janata, 178 E. 5th St., Brewster, OH 44613 USA.
 ;
 ;
 ;	You should use Spencer's Assembler (spasm) to assemble this. It may or
@@ -141,9 +141,14 @@ exit:
 ; General subroutines (ie, string printing, variable management, etc.).
 #include "routines.z80"
 
+; Our implementation of every hook.
+#include "hooks.z80"
 
 ; Constant data (user interface strings, variable names, etc.).
 #include "strings.inc"
+
+; Hook information database.
+#include "hooklist.inc"
 
 	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 	.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
