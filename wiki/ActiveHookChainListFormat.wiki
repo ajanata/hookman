@@ -1,4 +1,6 @@
+#summary Format of the AppVar which lists the active hook chains.
 #labels Phase-Design,Phase-Implementation
+
 This document describes the format of the active hook chain list application variable ("HMChains").
 
 =Outline overview=
@@ -24,4 +26,3 @@ appid - 1 byte - offset into (local!) application database, for recovering from 
 }}}
 
 basepage is used to reference all(!) other hooks to re-load the proper information into the hook
-
