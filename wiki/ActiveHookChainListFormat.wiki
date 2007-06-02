@@ -25,4 +25,4 @@ hookaddr - 1 word - address of $83 byte in hook
 appid - 1 byte - offset into (local!) application database, for recovering from deleted apps causing pages to shift. Currently unused and set to $00.
 }}}
 
-basepage is used to reference all(!) other hooks to re-load the proper information into the hook
+basepage is used to reference all(!) other hooks to re-load the proper information into all of the required hook RAM blocks.
