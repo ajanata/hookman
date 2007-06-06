@@ -84,7 +84,6 @@ public class BinTo8xv {
 			
 			// the data section's length is the length of the input file plus 17 header bytes plus the two
 			// size bytes in the variable data itself
-			// (omitting the version and flag bytes because they are not needed)
 			char datalen = (char)(infile.length() + 19);
 			out.write(datalen & 0xFF);
 			out.write(datalen >> 8);
