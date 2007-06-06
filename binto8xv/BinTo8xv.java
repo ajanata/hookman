@@ -31,10 +31,10 @@ public class BinTo8xv {
 
 	public static void main(String args[]) {
 		System.out.println("BinTo8xv version 1, Copyright (C) 2007 Andy Janata");
-    	System.out.println("BinTo8xv comes with ABSOLUTELY NO WARRANTY.");
-    	System.out.println("This is free software, and you are welcome to redistribute it");
-    	System.out.println("under certain conditions. See the file LICENSE.txt for details.");
-    	System.out.println();
+		System.out.println("BinTo8xv comes with ABSOLUTELY NO WARRANTY.");
+		System.out.println("This is free software, and you are welcome to redistribute it");
+		System.out.println("under certain conditions. See the file LICENSE.txt for details.");
+		System.out.println();
 		
 		
 		if (args.length < 3) showHelp();
@@ -163,6 +163,8 @@ public class BinTo8xv {
 		System.out.println("varname is the on-calculator variable name. Maximum length is 8 characters.");
 		System.out.println("The optional comment is only used in the .8xv file; a default is used if none");
 		System.out.println("is provided.");
+
+		System.exit(-1);
 	}
 	
 	private static class MyWriter {
