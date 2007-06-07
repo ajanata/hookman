@@ -23,7 +23,7 @@
 
 ;	User interface string resources.
 
-   ;    0123456789ABCEDF
+   ;     0123456789ABCEDF
 titleHookman:
 	.db "    HookMan     ",0
 titleInstall:
@@ -36,10 +36,10 @@ titleHelp:
 itemUninstall:	.db "Uninstall",0
 itemInstall:	.db "Install",0
 itemAdvanced:	.db "Advanced",0
-itemHelp			.db "Help",0
+itemHelp		.db "Help",0
 itemAbout		.db "About",0
-itemExit			.db "Exit",0
-itemBack			.db "Back",0
+itemExit		.db "Exit",0
+itemBack		.db "Back",0
 
 txtCopyright	.db "Copyright (",$FF,"c) '07 Andy Janata",0
 	
