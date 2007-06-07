@@ -44,7 +44,7 @@ PutS:
 ;		 (penRow)
 ;	 	 (penCol)
 ;	OUT: (hl): byte after null
-;	DESTROYS: a
+;	DESTROYS: a, de, ix
 VPutS:
 	ld a,(hl)
 	inc hl
@@ -52,7 +52,7 @@ VPutS:
 	ret z
 	bcall(_VPutMap)
 	jr VPutS
-	
+
 
 ;	VPutSC: Same as VPutS but allows a string to be "compressed" by introducing a
 ;		backspace character ($FF). VPutS is a few ticks faster, so should be used
@@ -71,3 +71,87 @@ VPutSC:
 	jr z,-_
 	bcall(_VPutMap)
 	jr VPutSC
+	
+
+;	Menu: Displays a menu on the screen defined by an information block. Handles kQuit
+;	by jumping to exit; kClear is returned as k0 (which is always displayed as Back).
+;	IN: (hl): pointer to a menu information block (see below)
+;	OUT: a: menu item number selected [0-menuitems]
+;	DESTROYS: fixme
+;
+;	Menu information block format:
+;	17 bytes: header (displayed in inverted large font at top of screen), null-terminated
+;	1 byte: number of defined menu items (item 0 is not included)
+;	n null-terminated strings displayed as menu itmes
+Menu:
+	push hl			; menu_block ret_addr
+	bcall(_ClrLCDFull)
+	ld hl,$0000
+	ld (curRow),hl
+	ld hl,$0905
+	ld (penCol),hl
+	pop hl			; ret_addr
+	set textInverse,(iy+textFlags)
+	call PutS
+	res textInverse,(iy+textFlags)
+	ld b,(hl)
+	push bc			; item_count ret_addr
+	inc hl
+	ld de,menuNumbers+3
+_:
+	ex de,hl	; de: place in menu block    hl: menu number
+	
+	push de
+	call VPutS
+	pop de
+	
+	ex de,hl	; de: menu number    hl: place in menu block
+	
+	ld a,(penCol)
+	add a,4
+	ld (penCol),a
+	
+	push de
+	call VPutS	; put the menu item string
+	pop de
+	
+	ld a,5		; reset cursor for next menu item
+	ld (penCol),a
+	ld a,(penRow)
+	add a,7
+	ld (penRow),a
+	djnz -_			; loop to show all of the menu items
+	ld hl,menuNumbers
+	call VPutS
+	ld a,(penCol)	; this can be replaced with a static number later
+	add a,4
+	ld (penCol),a
+	ld hl,itemBack
+	call VPutS
+	
+	; ok, now the menu is on the screen
+	pop bc			; ret_addr       item count into b
+	inc b
+_:
+	bcall(_GetKey)
+	cp kQuit
+	jp z,exit
+	cp kClear
+	jr nz,+_
+	ld a,k0
+_:
+	sub k0
+	cp b
+	jr nc,--_		; loop for more keys
+	ret				; a contains the number of the menu item
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	

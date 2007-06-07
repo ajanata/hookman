@@ -111,16 +111,15 @@ _:
 	dec a
 	jr z,helpMenu
 	dec a
-	jr z,About
+	jp z,About
 	jp -_
 
 
 InstallUninstall:
 advancedMenu:
 helpMenu:
-About:
 	; stub for keys for the time being
-mainMenuStub:
+menuStub:
 	bcall(_ClrLCDFull)
 	ld hl,$0000
 	ld (curRow),hl
@@ -143,6 +142,10 @@ exit:
 
 ; Our implementation of every hook.
 #include "hooks.z80"
+
+; About menu
+#include "about.z80"
+
 
 ; Constant data (user interface strings, variable names, etc.).
 #include "strings.inc"
