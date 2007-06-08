@@ -135,7 +135,9 @@ public class BinTo8xv {
 			out.write(w.getSum() >> 8);
 			
 			out.close();
-			in.close();	
+			in.close();
+
+			System.out.println(args[1] + " successfully created.");	
 			
 		} catch (Exception e) {
 			System.out.println("Error while converting file.");

@@ -22,8 +22,17 @@
 ;	This file contains HookMan's implementaion of every hook. These are just
 ;	stubs which stick a number into b (after pushing bc to the stack) and jump
 ;	to a unified hook handler.
+;	Also contains utility routines to (un)install hooks.
+
+;	Every hook must start with a $83 byte. This is used to verify the address
+;	of the hook is valid. It is not executed. ($83 is "add a,e", in case you
+;	were wondering.)
+
+
+; Each hook is 1+1+2+3=7 bytes
 
 ;9B78 - Link Activity Hook
+hookCode:
 hookLinkActivity:
 	.db $83
 	push bc
@@ -193,3 +202,71 @@ doHook:
 	; this dummy hook will not work for all of the different hooks!
 	pop bc
 	ret
+	
+	
+;	Install the given hook number. Assumes that any current hook has
+;	been saved if needed and also that there are hooks in the chain
+;	that belong to this hook.
+;	IN: a: Hook number to install.
+;	OUT: hook is installed and enabled
+;	DESTROYS: everything
+installHook:
+	ld hl,HookInfoLUT
+	ld de,hookCode
+	or a			; we need to skip our loop entirely for hook 0
+	jp z,++_
+	ld b,a
+_:
+	inc hl			; the LUT has 2-byte entries
+	inc hl
+	inc de			; each hook's code is 7 bytes
+	inc de			; 2
+	inc de
+	inc de			; 4
+	inc de
+	inc de			; 6
+	inc de
+	djnz -_
+__:
+	; now hl points to the entry in the LUT and de points to the code for that hook
+	bcall(_LdHLInd)
+	; now hl points to the actual information block for the hook
+	inc hl
+	push hl
+	bcall(_LdHLInd)		; yay pointer to a pointer!
+	; and now, finally, hl points to the hook block in RAM
+	; de still points to the address of our hook handler
+	ld (hl),e
+	inc hl
+	ld (hl),d
+	in a,(6)		; our page
+	inc hl
+	ld (hl),a		; now the hook ram block is set up right
+	pop hl			; hl points to the ram block address in the hook info block now
+	inc hl			; move past ram block address
+	inc hl
+	ld b,0
+	ld c,(hl)		; bc now has the flags offset
+	ex de,hl		; de points to flag offst byte in hook info block, hl is junk
+	ld hl,flags
+	add hl,bc		; hl points to the flag byte
+	inc de			; de points to bitmask for hook enable flag
+	ld a,(de)		; load the bitmask into a
+	or (hl)			; set the bit for this hook
+	ld (hl),a		; store it back to the flag byte
+	; ... and I think we're done
+	ret
+
+
+
+; hook block is <addrL> <addrH> <page> <spare>
+
+
+
+
+
+
+
+
+
+

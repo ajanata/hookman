@@ -41,7 +41,7 @@ _:
 	xor a
 	ld (penCol),a
 	ld a,(penRow)
-	add a,6
+	add a,7
 	ld (penRow),a
 	djnz -_
 	
@@ -58,7 +58,7 @@ _:
 	xor a
 	ld (penCol),a
 	ld a,(penRow)
-	add a,6
+	add a,7
 	ld (penRow),a
 	djnz -_
 	
