@@ -6,7 +6,7 @@ This document describes the format of the active hook chain list application var
 =Outline overview=
 
   # Signature.
-  # Offset pointer table for every hook chain. $00 if no hooks defined for a given chain. Calculate location of head of chain as (varloc)+len(header)+(offset*len(chainnode))
+  # Offset pointer table for every hook chain. $00 if no hooks defined for a given chain. Calculate location of head of chain as (varloc)+len(header)+((offset-1)*len(chainnode))   where header includes the offset table
   # Hook chains.
 
 
