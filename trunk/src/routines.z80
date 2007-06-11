@@ -155,10 +155,65 @@ _:
 	ret				; a contains the number of the menu item
 	
 	
+;	SafeArc: Checks battery level before archiving a variable.
+;		Assumes variable is not already in archive!
+;	INPUTS: OP1: variable type + name
+;	OUTPUTS: Z if batteries too low to archive
+;	DESTROYS: all, OP3
+SafeArc:
+	bcall(_Chk_Batt_Low)
+	ret z
+	ld hl,+_
+	call APP_PUSH_ERRORH
+	bcall(_Arc_Unarc)
+	call APP_POP_ERRORH
+_:							; dummy error handler
+	ret
 	
 	
+;	BHL_plus_DE: Adds de to address b:hl, wrapping pages if needed.
+;	IN: b:hl: page:addr address to add to
+;		de: offset to add
+;		0,(ix+0): If set, just adds de to hl
+;	OUT: b:hl: page:addr address as result of addition, with page wrapping if required
+;	DESTROYS: none
+BHL_plus_DE:
+	bit 0,(ix+0)
+	jr z, +_
+	add hl,de
+	ret
+_:
+BHL_plus_DE_force:
+	add hl,de
+_:	bit 7,h			; this code to wrap around pages is common to these three routines
+	ret z
 	
+	inc b
+	res 7,h
+	set 6,h
+	ret
+
+
+;	LoadCIndPaged_inc: Reads byte at b:hl from flash into c and increments b:hl,
+;		wrapping pages if needed
+;	IN: b:hl: Byte to read
+;	OUT: c: Byte read
+;	DESTROYS: none
+LoadCIndPaged_inc:
+	bcall(_LoadCIndPaged)
+	inc hl
+	jr -_
 	
+
+;	LoadDEIndPaged_inc: Reads word at b:hl from flash into de and increments b:hl,
+;		wrapping pages if needed
+;	IN: b:hl: Word to read
+;	OUT: de: Word read
+;	DESTROYS: none	
+LoadDEIndPaged_inc:
+	bcall(_LoadDEIndPaged)
+	inc hl
+	jr -_
 	
 	
 	

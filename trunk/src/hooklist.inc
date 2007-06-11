@@ -50,6 +50,8 @@ SilentLinkHook		.equ 21
 USBActivityHook		.equ 22
 
 
+MAX_HOOK			.equ USBActivityHook
+
 ;	This LUT is in the same order as above.
 HookInfoLUT:
 	.dw LinkActivityHookInfo
