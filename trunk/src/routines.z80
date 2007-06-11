@@ -50,7 +50,9 @@ VPutS:
 	inc hl
 	or a
 	ret z
+	push hl
 	bcall(_VPutMap)
+	pop hl
 	jr VPutS
 
 
@@ -69,20 +71,23 @@ VPutSC:
 	ret z
 	cp $FF
 	jr z,-_
+	push hl
 	bcall(_VPutMap)
+	pop hl
 	jr VPutSC
 	
 
 ;	Menu: Displays a menu on the screen defined by an information block. Handles kQuit
 ;	by jumping to exit; kClear is returned as k0 (which is always displayed as Back).
 ;	IN: (hl): pointer to a menu information block (see below)
-;	OUT: a: menu item number selected [0-menuitems]
-;	DESTROYS: fixme
+;	OUT: a: menu item number selected [1, menuitems+1]
+;	DESTROYS: everything
 ;
 ;	Menu information block format:
 ;	17 bytes: header (displayed in inverted large font at top of screen), null-terminated
-;	1 byte: number of defined menu items (item 0 is not included)
-;	n null-terminated strings displayed as menu itmes
+;			(does not strictly have to be 17 bytes, but will not be a full black bar without)
+;	1 byte: number of defined menu items (last item (back) is not included)
+;	n null-terminated strings: menu itmes
 Menu:
 	push hl			; menu_block ret_addr
 	bcall(_ClrLCDFull)
@@ -121,7 +126,9 @@ _:
 	add a,7
 	ld (penRow),a
 	djnz -_			; loop to show all of the menu items
-	ld hl,menuNumbers
+	
+	ex de,hl
+	;ld hl,menuNumbers	; now the back item
 	call VPutS
 	ld a,(penCol)	; this can be replaced with a static number later
 	add a,4
@@ -131,18 +138,20 @@ _:
 	
 	; ok, now the menu is on the screen
 	pop bc			; ret_addr       item count into b
-	inc b
+	inc b			; we have b+1 items (back isn't included in count)
 _:
 	bcall(_GetKey)
 	cp kQuit
 	jp z,exit
 	cp kClear
 	jr nz,+_
-	ld a,k0
+	ld a,b			; make kClear be whatever number back is
+	add a,k0
 _:
-	sub k0
+	sub k1			; trickery to not have to mess around later
 	cp b
 	jr nc,--_		; loop for more keys
+	inc a
 	ret				; a contains the number of the menu item
 	
 	

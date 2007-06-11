@@ -211,6 +211,7 @@ doHook:
 ;	OUT: hook is installed and enabled
 ;	DESTROYS: everything
 installHook:
+	di				; so the old hook can't be run, if it's already active
 	ld hl,HookInfoLUT
 	ld de,hookCode
 	or a			; we need to skip our loop entirely for hook 0
@@ -247,7 +248,7 @@ __:
 	inc hl
 	ld b,0
 	ld c,(hl)		; bc now has the flags offset
-	ex de,hl		; de points to flag offst byte in hook info block, hl is junk
+	ex de,hl		; de points to flag offset byte in hook info block, hl is junk
 	ld hl,flags
 	add hl,bc		; hl points to the flag byte
 	inc de			; de points to bitmask for hook enable flag
@@ -255,11 +256,10 @@ __:
 	or (hl)			; set the bit for this hook
 	ld (hl),a		; store it back to the flag byte
 	; ... and I think we're done
+	ei
 	ret
 
 
-
-; hook block is <addrL> <addrH> <page> <spare>
 
 
 
