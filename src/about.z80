@@ -24,12 +24,12 @@
 About:
 	ld hl,aboutMenu
 	call menu
-	
-	or a
-	jp z,mainMenu
 	dec a
 	jp z,aboutAbout
-	; fall through on item 2
+	dec a
+	jp z,aboutLicense
+	jp mainMenu
+	
 aboutLicense:
 	bcall(_ClrLCDFull);
 	ld hl,$0000
