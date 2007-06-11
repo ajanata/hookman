@@ -263,9 +263,175 @@ __:
 
 
 
+; Routines for getting hook chain stuff:
+;	ChainInit - chain number - finds chain, sets up pointers
+;	ChainNext - pulls next node into ram
+;	ChainVerify - makes sure next node is still a valid hook
+;	ChainGetRelatives - scan hook chain list for relatives of the next hook to call (ie, hooks from same app)
+;					and put them into the hook blocks. also stores THIS hook into its block
+;	ChainRestoreHooks - restore hooks that were needed for relatives
+;
+;	ChainFetchByte - fetch byte from HMChains into a spot in ram. currenly a wrapper for LoadCIndPaged_inc
+;				also checks the "is HMChains archived" bit and just copies the data if it isn't
+;	ChainFetchWord - fetch word ....
+
+workram	.equ symTable+1		; change if needed - for current chain node, and backing up stuff, and pointers
+; layout:
+; byte 0: flags
+;		bit 0: 1 if HMChains isn't archived
+; byte 1: page of next byte in HMChains
+; bytes 2-3: address of next byte in HMChains
 
 
+AV_HMChains:
+	.db AppVarObj, "HMChains"
+Sig_HMChains:
+	.db "HMCL",0			; this is not a null-terminator: it is a version byte
 
+
+;	ChainInit: Initializes pointers for walking the hook chain
+;	IN: a: hook number
+;	OUT: pointers initialized
+;		carry flag: set if HMChains appvar not found, cannot do hook chains
+;	DESTROYS: fixme, probably everything
+ChainInit:
+	push ix				; [ix] [ret addr]
+	ld ix,workram
+	ld hl,AV_HMChains
+	rst 20h				; rMOV9TOOP1
+	bcall(_ChkFindSym)
+	ret c				; not found
+	push af				; [hook number] [ix] [ret addr]
+	ld a,b
+	or a
+	jr nz,+_
+	; it isn't archived... that should not happen
+	; oh well, guess we deal with it
+	set 0,(ix+0)
+	inc de
+	inc de				; get past size bytes
+	jr ++_
+_:
+	; it's in archive, yay, happy fun time
+	res 0,(ix+0)
+	ex de, hl			; I *think* not doing first ex de,hl, and putting 18 into hl, may work
+	ld de,18			; skip over data valid flag, data length, symbol entry copy,
+	call BHL_plus_DE	; name length, type byte, and name, to point to data
+	ex de,hl	
+_:	
+	; now check the signature to make sure it's a valid chain
+	ex de,hl
+	ld de,Sig_HMChains
+	push bc
+	
+	; I have a feeling I'll need completely different code 
+	
+	;	there aren't enough registers to do this in a loop
+	; 1
+	call ChainFetchByte
+	ld a,(de)
+	inc de
+	cp c
+	jr nz,+_
+	; 2
+	call ChainFetchByte
+	ld a,(de)
+	inc de
+	cp c
+	jr nz,+_
+	; 3
+	call ChainFetchByte
+	ld a,(de)
+	inc de
+	cp c
+	jr nz,+_
+	; 4
+	call ChainFetchByte
+	ld a,(de)
+	inc de
+	cp c
+	jr nz,+_
+	; 5
+	call ChainFetchByte
+	ld a,(de)
+	cp c					; in the future, we will have to support older versions of chain lists
+	jr z,++_				; but there is only one version for now
+	
+_:
+	; the sig was bad, can't use it for a chain, bail out
+	scf
+	ret
+	
+_:
+	; now b:hl points to the beginning of the offset table
+	pop af				; [ix] [ret addr]
+	push af				; [hook num] [ix] [ret addr]
+	ld d,0
+	ld e,a
+	call BHL_plus_DE	; get offset into table for this hook
+	bcall(_LoadCIndPaged)	; don't need b:hl incremented
+	ld (ix+1),c			; ix+1 temporarily holds offset of head of chain
+	pop bc				; b: hook num c: old f		[ix] [ret addr]
+	ld a,MAX_HOOK
+	sub b
+	ld d,0
+	ld e,a
+	call BHL_plus_DE
+	; b:hl now points to the first hook chain node
+	ex de,hl			; h is still 0
+	ld l,(ix+1)			; offset for head of chain
+	push de				; [ptr in chain list] [ix] [ret addr]
+	ld d,h
+	ld e,l
+	add hl,hl
+	add hl,hl
+	add hl,de
+	pop de				; [ix] [ret addr]
+	ex de,hl
+	call BHL_plus_DE
+	; and how b:hl should be the first hook in the chain!
+	
+	ld (ix+1),b
+	ld (ix+2),l
+	ld (ix+3),h
+	
+	; finally should be done >:l
+	pop ix
+	ret
+
+
+;	ChainFetchByte: Reads a byte from b:hl into c. If HMChains is not archived (0,(ix+0) is set),
+;		just copies byte from (hl) to c.
+;	IN: b:hl: page:addr of byte to read
+;		0,(ix+0): If 1, byte is read directly from (hl)
+;	OUT: c: byte read
+;		b:hl++, with page wrapping if needed
+;	DESTROYS: none
+ChainFetchByte:
+	bit 0,(ix+0)
+	jp z,LoadCIndPaged_inc		; just hand off execution to that routine
+	; isn't archived, just move a byte
+	ld c,(hl)
+	inc hl
+	ret
+
+
+;	ChainFetchWord: Reads a word from b:hl into de. If HMChains is not archived (0,(ix+0) is set),
+;		just copies word from (hl) to de.
+;	IN: b:hl: page:addr of word to read
+;		0,(ix+0): If 1, word is read directly from (hl)
+;	OUT: de: word read
+;		b:hl+=2, with page wrapping if needed
+;	DESTROYS: none
+ChainFetchWord:
+	bit 0,(ix+0)
+	jp z,LoadDEIndPaged_inc		; just let that do its thing
+	; in RAM, just read from there
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	inc hl
+	ret
 
 
 
