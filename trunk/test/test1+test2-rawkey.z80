@@ -1,0 +1,50 @@
+; This is a test hook chain definition file.
+; It is for an 84+SE, probably will work for an 83+SE.
+
+; load order: hookman, test app 1, test app 2[, calcsys]
+
+	.db "HMCL",0		; that is a verion byte, not a null terminator
+
+	.db 0		; 0
+	.db 0
+	.db 1		; rawkey hook
+	.db 0
+	.db 0		; 4
+	.db 0
+	.db 0
+	.db 0
+	.db 0
+	.db 0		; 9
+	.db 0
+	.db 0
+	.db 0
+	.db 0
+	.db 0		; 14
+	.db 0
+	.db 0
+	.db 0
+	.db 0
+	.db 0		; 19
+	.db 0
+	.db 0
+	.db 0		; 22 hooks
+	
+	
+	; rawkey hook chain
+	; test app 1 (1->0)
+	.db	$68		; basepage
+	.db $68		; hookpage
+	.dw $415B	; hookaddr
+	.db $00		; reserved
+	
+	; test app 2 (4->5)
+	.db	$67		; basepage
+	.db $67		; hookpage
+	.dw $415B	; hookaddr
+	.db $00		; reserved
+	
+	; end of chain
+	.db $FF
+	.db $00
+	.dw $0000
+	.db $00

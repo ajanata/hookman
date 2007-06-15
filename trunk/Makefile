@@ -17,5 +17,17 @@ install:
 emulate:
 	$(WABBITEMU) bin/HookMan.8xk > $(NULL) 2>&1
 
+emulate2:
+	$(WABBITEMU) bin/HookMan.8xk bin/testapp1.8xk bin/testapp2.8xk _local/calcsys.8xk > $(NULL) 2>&1
+
+emulate3:
+	$(WABBITEMU) bin/HookMan.8xk _local/omnicalc.8xk _local/ShortCut.8xk _local/calcsys.8xk > $(NULL) 2>&1
+
+testing:
+	spasm test/testapp1.z80 -I src
+	spasm test/testapp2.z80 -I src
+	wabbit test/testapp1.bin bin/testapp1.8xk
+	wabbit test/testapp2.bin bin/testapp2.8xk
+
 clean:
-	-$(RM) src/hookman.bin src/hookman.inc bin/hookman.8xk tilp.log
+	-$(RM) src/hookman.bin src/hookman.inc bin/*.8xk test/testapp*.bin tilp.log
