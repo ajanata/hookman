@@ -200,9 +200,84 @@ hookUSBActivity:
 ;	   top of stack: Old bc to pass to the real hook.
 doHook:
 	; this dummy hook will not work for all of the different hooks!
+	
+	; STACK: [bc] [ret addr]
+	push af
+	push de
+	push hl
+	;push ix
+	;pop hl
+	;ld (ixbackup),l
+	;ld (ixbackup+1),h
+	; [hl] [de] [af] [bc] [ret addr]
+	ld a,b
+	ld ($FFFF),a
+	call ChainInit
+	jp c,SomethingBroke
+_:
+	call ChainNext
+	jr c,++_				; end of chain
+	call ChainVerify
+	jr nz,-_			; hook isn't valid
+	call ChainGetRelatives
+	; now do the chaining!
+	; workram+wrHookAddrL (3 bytes) should be usable for _OffPageJump
+	pop hl
+	pop de
+	pop af
+	pop bc
+	ld ix,+_
+	push ix
+	ld ix,workram+wrHookAddrL
+	push ix
+	;ld ixl,(ixbackup)
+	;ld ixh,(ixbackup+1)
+	bjump(_OffPageJump)
+	; probably eventually I'm going to want to check the flags from the hook
+	; we just ran to see if it wants to ignore this event, and just stop
+	; the chain in that case -- but not now TODO
+	
+_:	; push all the registers again
+	push bc
+	push af
+	push de
+	push hl
+	;ld (ixbackup),ixl
+	;ld (ixbackup+1),ixh
+	call ChainRestoreHooks
+	jr --_
+
+
+_:	; we're done!
+	; need to restore our hook
+	; but not yet since we never actually change the hook block
+
+	pop hl
+	pop de
+	pop af
 	pop bc
 	ret
 	
+	
+	
+;	SomethingBroke: Something along the way broke. Probably can't find the chain list
+;		appvar, or it isn't a valid chain list, or something equally as fatal.
+;		Throw shit in the air and make a commotion.
+;			FIXME: Need to run a hook which does the bare minimum required for normal
+;			operation. This will not be fun for the localize hook.
+;	IN: Stack should be [hl] [de] [af] [bc] [ret addr]
+;		($FFFF) should be hook number
+SomethingBroke:
+	; FIXME FIXME FIXME FIXME
+	xor a
+	ld ($FFFF),a
+	pop hl
+	pop de
+	pop af
+	pop bc
+	ret
+
+
 	
 ;	Install the given hook number. Assumes that any current hook has
 ;	been saved if needed and also that there are hooks in the chain
@@ -266,7 +341,7 @@ __:
 ; Routines for getting hook chain stuff:
 ;	ChainInit - chain number - finds chain, sets up pointers
 ;	ChainNext - pulls next node into ram
-;	ChainVerify - makes sure next node is still a valid hook
+;	ChainVerify - makes sure next node (one ChainNext got) is still a valid hook
 ;	ChainGetRelatives - scan hook chain list for relatives of the next hook to call (ie, hooks from same app)
 ;					and put them into the hook blocks. also stores THIS hook into its block
 ;	ChainRestoreHooks - restore hooks that were needed for relatives
@@ -275,12 +350,29 @@ __:
 ;				also checks the "is HMChains archived" bit and just copies the data if it isn't
 ;	ChainFetchWord - fetch word ....
 
-workram	.equ symTable+1		; change if needed - for current chain node, and backing up stuff, and pointers
+ixbackup .equ symTable+1
+workram	.equ ixbackup+2		; change if needed - for current chain node, and backing up stuff, and pointers
+
 ; layout:
 ; byte 0: flags
 ;		bit 0: 1 if HMChains isn't archived
 ; byte 1: page of next byte in HMChains
 ; bytes 2-3: address of next byte in HMChains
+; byte 4: basepage of active hook
+; bytes 5-6: address of active hook
+; byte 7: hookpage of active hook
+wrFlags			.equ 0
+wrFlagRAM		.equ 0
+
+wrChainPage		.equ 1
+wrChainAddrL	.equ 2
+wrChainAddrH	.equ 3
+wrHookBasepage	.equ 4
+wrHookAddrL		.equ 5
+wrHookAddrH		.equ 6
+wrHookHookpage	.equ 7
+
+
 
 
 AV_HMChains:
@@ -293,40 +385,44 @@ Sig_HMChains:
 ;	IN: a: hook number
 ;	OUT: pointers initialized
 ;		carry flag: set if HMChains appvar not found, cannot do hook chains
-;	DESTROYS: fixme, probably everything
+;	DESTROYS: af, bc, de, hl  (PRESERVES: ix)
 ChainInit:
 	push ix				; [ix] [ret addr]
+	push af				; [hook num] [ix] [ret addr]
 	ld ix,workram
 	ld hl,AV_HMChains
 	rst 20h				; rMOV9TOOP1
 	bcall(_ChkFindSym)
-	ret c				; not found
-	push af				; [hook number] [ix] [ret addr]
+	jr nc,+_
+	; not found
+	pop af
+	pop ix
+	ret
+_:
 	ld a,b
 	or a
 	jr nz,+_
 	; it isn't archived... that should not happen
 	; oh well, guess we deal with it
-	set 0,(ix+0)
+	set wrFlagRAM,(ix+wrFlags)
 	inc de
 	inc de				; get past size bytes
 	jr ++_
 _:
 	; it's in archive, yay, happy fun time
-	res 0,(ix+0)
+	res wrFlagRAM,(ix+wrFlags)
 	ex de, hl			; I *think* not doing first ex de,hl, and putting 18 into hl, may work
-	ld de,18			; skip over data valid flag, data length, symbol entry copy,
+	ld de,20			; skip over data valid flag, data length, symbol entry copy,
 	call BHL_plus_DE	; name length, type byte, and name, to point to data
 	ex de,hl	
 _:	
 	; now check the signature to make sure it's a valid chain
 	ex de,hl
 	ld de,Sig_HMChains
-	push bc
-	
-	; I have a feeling I'll need completely different code 
+	push bc				; [page] [hook num] [ix] [ret addr]
 	
 	;	there aren't enough registers to do this in a loop
+	; can be opitimized later if needed
 	; 1
 	call ChainFetchByte
 	ld a,(de)
@@ -359,27 +455,34 @@ _:
 	
 _:
 	; the sig was bad, can't use it for a chain, bail out
+	pop bc
+	pop af
+	pop ix
 	scf
 	ret
 	
 _:
 	; now b:hl points to the beginning of the offset table
+	pop bc				; [hook num] [ix] [ret addr]
 	pop af				; [ix] [ret addr]
 	push af				; [hook num] [ix] [ret addr]
 	ld d,0
 	ld e,a
 	call BHL_plus_DE	; get offset into table for this hook
-	bcall(_LoadCIndPaged)	; don't need b:hl incremented
-	ld (ix+1),c			; ix+1 temporarily holds offset of head of chain
+	call ChainFetchByte
+	ld (ix+wrChainPage),b
+	ld (ix+wrHookBasepage),c			; ix+wrHookBasepage temporarily holds offset of head of chain
 	pop bc				; b: hook num c: old f		[ix] [ret addr]
 	ld a,MAX_HOOK
 	sub b
 	ld d,0
 	ld e,a
+	ld b,(ix+wrChainPage)
 	call BHL_plus_DE
 	; b:hl now points to the first hook chain node
 	ex de,hl			; h is still 0
-	ld l,(ix+1)			; offset for head of chain
+	ld l,(ix+wrHookBasepage)			; offset for head of chain
+	dec l				; the first offset is stored as 1 but it really needs to be 0 -- adjust everything back 1
 	push de				; [ptr in chain list] [ix] [ret addr]
 	ld d,h
 	ld e,l
@@ -391,13 +494,100 @@ _:
 	call BHL_plus_DE
 	; and how b:hl should be the first hook in the chain!
 	
-	ld (ix+1),b
-	ld (ix+2),l
-	ld (ix+3),h
+	ld (ix+wrChainPage),b
+	ld (ix+wrChainAddrL),l
+	ld (ix+wrChainAddrH),h
 	
 	; finally should be done >:l
 	pop ix
+	scf
+	ccf				; make sure carry isn't set
 	ret
+
+
+
+;	ChainNext: Pulls information about the next hook in the chain into RAM.
+;	IN: pointers initialized at workram
+;	OUT: ix+(4-7) contain base/hook page/addr of next hook in chain, pointers updated, OR
+;		carry flag: end of chain
+;	DESTROYS: af, bc, de, hl
+ChainNext:
+	push ix				; [ix] [ret addr]
+	ld ix,workram
+	ld b,(ix+wrChainPage)
+	ld l,(ix+wrChainAddrL)
+	ld h,(ix+wrChainAddrH)
+	call ChainFetchByte
+	ld a,c
+	inc a				; end-of-chain marker is $FF
+	jr nz,+_
+	; end of the chain
+	pop ix
+	scf
+	ret
+	
+_:
+	ld (ix+wrHookBasepage),c
+	call ChainFetchByte
+	ld (ix+wrHookHookpage),c
+	call ChainFetchWord
+	inc de						; step past the $83 / add a,e   check byte
+	ld (ix+wrHookAddrL),e
+	ld (ix+wrHookAddrH),d
+	call ChainFetchByte			; we don't need the value returned by this anywhere, just to advance pointers
+	; save pointers back
+	ld (ix+wrChainPage),b
+	ld (ix+wrChainAddrL),l
+	ld (ix+wrChainAddrH),h
+	pop ix
+	scf
+	ccf				; make sure carry isn't set
+	ret
+
+
+
+;	ChainVerify: Check the byte pointed to by the next hook to make sure it is still the signature $83.
+;	IN: workram pointers set up properly
+;	OUT: zero (not carry!) clear if hook valid, set if not
+;	DESTROYS: af, bc, hl
+ChainVerify:
+	push ix
+	ld ix,workram
+	ld b,(ix+wrHookHookpage)
+	ld l,(ix+wrHookAddrL)
+	ld h,(ix+wrHookAddrH)
+	dec hl						; and we need to step back again so we are pointing to the check byte
+	bcall(_LoadCIndPaged)
+	ld a,c
+	cp $83
+	pop ix
+	ret
+
+
+
+;	ChainGetRelatives: Get all other hooks from the same app as the next in the chain and
+;		load them into the RAM blocks.
+;		Also loads the next hook into the ram block for the active hook.
+;			FIXME: Actually implement this. Always returns success.
+;	IN: workram pointers set up properly
+;	OUT: Nothing
+;	DESTROYS: fixme
+ChainGetRelatives:
+	ret
+
+
+
+
+;	ChainRestoreHooks: Restores hooks loaded by ChainGetRelatives.
+;			FIXME: Actually implement this. Always returns success.
+;	IN: workram pointers set up properly
+;	OUT: Nothing
+;	DESTROYS: fixme
+ChainRestoreHooks:
+	ret
+
+
+
 
 
 ;	ChainFetchByte: Reads a byte from b:hl into c. If HMChains is not archived (0,(ix+0) is set),
