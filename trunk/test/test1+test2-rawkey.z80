@@ -3,7 +3,7 @@
 
 ; load order: hookman, test app 1, test app 2[, calcsys]
 
-	.db "HMCL",0		; that is a verion byte, not a null terminator
+	.db "HMCL",0		; that is a version byte, not a null terminator
 
 	.db 0		; 0
 	.db 0
