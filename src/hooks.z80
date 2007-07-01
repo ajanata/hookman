@@ -364,13 +364,22 @@ workram	.equ ixbackup+2		; change if needed - for current chain node, and backin
 wrFlags			.equ 0
 wrFlagRAM		.equ 0
 
+; the location of the next node in the chain we are processing
 wrChainPage		.equ 1
 wrChainAddrL	.equ 2
 wrChainAddrH	.equ 3
+; the location of the hook of the current node we are processing
+; this is used with _OffPageJump, as well
 wrHookBasepage	.equ 4
 wrHookAddrL		.equ 5
 wrHookAddrH		.equ 6
 wrHookHookpage	.equ 7
+; the location of the head of the offset table
+; this is used to step through the offset table to step through chains,
+; looking for other hooks which belong to the current app we are chainging
+wrTablePage		.equ 8
+wrTableAddrL	.equ 9
+wrTableAddrH	.equ 10
 
 
 
@@ -411,7 +420,7 @@ _:
 _:
 	; it's in archive, yay, happy fun time
 	res wrFlagRAM,(ix+wrFlags)
-	ex de, hl			; I *think* not doing first ex de,hl, and putting 18 into hl, may work
+	ex de, hl			; I *think* not doing first ex de,hl, and putting 20 into hl, may work
 	ld de,20			; skip over data valid flag, data length, symbol entry copy,
 	call BHL_plus_DE	; name length, type byte, and name, to point to data
 	ex de,hl	
@@ -419,7 +428,9 @@ _:
 	; now check the signature to make sure it's a valid chain
 	ex de,hl
 	ld de,Sig_HMChains
-	push bc				; [page] [hook num] [ix] [ret addr]
+	; I don't think I even need to save this ...
+	; seems to work without it
+	;push bc				; [page before checking sig] [hook num] [ix] [ret addr]
 	
 	;	there aren't enough registers to do this in a loop
 	; can be opitimized later if needed
@@ -455,7 +466,7 @@ _:
 	
 _:
 	; the sig was bad, can't use it for a chain, bail out
-	pop bc
+	;pop bc
 	pop af
 	pop ix
 	scf
@@ -463,7 +474,10 @@ _:
 	
 _:
 	; now b:hl points to the beginning of the offset table
-	pop bc				; [hook num] [ix] [ret addr]
+	
+	; why am I popping this? it replaces the page we walked to with the original page...
+	; removed since I removed the push above to no apparent ill effects
+	;pop bc				; [hook num] [ix] [ret addr]
 	pop af				; [ix] [ret addr]
 	push af				; [hook num] [ix] [ret addr]
 	ld d,0
@@ -486,7 +500,7 @@ _:
 	push de				; [ptr in chain list] [ix] [ret addr]
 	ld d,h
 	ld e,l
-	add hl,hl
+	add hl,hl			; multiply by 5 bytes per node
 	add hl,hl
 	add hl,de
 	pop de				; [ix] [ret addr]
@@ -584,6 +598,11 @@ ChainGetRelatives:
 ;	OUT: Nothing
 ;	DESTROYS: fixme
 ChainRestoreHooks:
+	; can't indiscriminately restore all of our hooks in case some aren't needed,
+	; as some hooks can't be stubbed away very easily
+	; probably should step through configuration appvar, looking for hooks we are
+	; supposed to be managing. of course that means the infrastructure for the
+	; configuration appvar has to be in place before this can be implemented...
 	ret
 
 
@@ -598,7 +617,7 @@ ChainRestoreHooks:
 ;		b:hl++, with page wrapping if needed
 ;	DESTROYS: none
 ChainFetchByte:
-	bit 0,(ix+0)
+	bit wrFlagRAM,(ix+wrFlags)
 	jp z,LoadCIndPaged_inc		; just hand off execution to that routine
 	; isn't archived, just move a byte
 	ld c,(hl)
@@ -614,7 +633,7 @@ ChainFetchByte:
 ;		b:hl+=2, with page wrapping if needed
 ;	DESTROYS: none
 ChainFetchWord:
-	bit 0,(ix+0)
+	bit wrFlagRAM,(ix+wrFlags)
 	jp z,LoadDEIndPaged_inc		; just let that do its thing
 	; in RAM, just read from there
 	ld e,(hl)
