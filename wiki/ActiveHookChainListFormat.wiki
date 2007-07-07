@@ -9,6 +9,7 @@ This document describes the format of the active hook chain list application var
   1. Signature.
   2. Offset pointer table for every hook chain. $00 if no hooks defined for a given chain. Calculate location of head of chain as (varloc)+len(header)+((offset-1)*len(chainnode))   where header includes the offset table
   3. Hook chains.
+  4. $FE appvar terminator.
 }}}
 
 =Definitions=
@@ -28,4 +29,3 @@ appid - 1 byte - offset into (local!) application database, for recovering from 
 }}}
 
 basepage is used to reference all(!) other hooks to re-load the proper information into all of the required hook RAM blocks.
-
