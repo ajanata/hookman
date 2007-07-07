@@ -211,7 +211,7 @@ doHook:
 	;ld (ixbackup+1),h
 	; [hl] [de] [af] [bc] [ret addr]
 	ld a,b
-	ld ($FFFF),a
+	ld ($FFFF),a			; store the hook number to $FFFF for use later(?)
 	call ChainInit
 	jp c,SomethingBroke
 _:
@@ -236,6 +236,7 @@ _:
 	; probably eventually I'm going to want to check the flags from the hook
 	; we just ran to see if it wants to ignore this event, and just stop
 	; the chain in that case -- but not now TODO
+	; (this would be different for most of the hooks)
 	
 _:	; push all the registers again
 	push bc
@@ -252,11 +253,13 @@ _:	; we're done!
 	; need to restore our hook
 	; but not yet since we never actually change the hook block
 
-	pop hl
-	pop de
-	pop af
-	pop bc
-	ret
+	jp exitHook
+
+	;pop hl
+	;pop de
+	;pop af
+	;pop bc
+	;ret
 	
 	
 	
@@ -269,6 +272,13 @@ _:	; we're done!
 ;		($FFFF) should be hook number
 SomethingBroke:
 	; FIXME FIXME FIXME FIXME
+
+	; just go through exitHook for now
+
+
+
+;	Clean up the registers and $FFFF to exit the hook cleanly
+exitHook:
 	xor a
 	ld ($FFFF),a
 	pop hl
@@ -376,11 +386,13 @@ wrHookAddrH		.equ 6
 wrHookHookpage	.equ 7
 ; the location of the head of the offset table
 ; this is used to step through the offset table to step through chains,
-; looking for other hooks which belong to the current app we are chainging
+; looking for other hooks which belong to the current app we are chaining
 wrTablePage		.equ 8
 wrTableAddrL	.equ 9
 wrTableAddrH	.equ 10
-
+; unfortunately I need a couple more scratch bytes
+wrTemp1			.equ 11
+wrTemp2			.equ 12
 
 
 
@@ -428,9 +440,6 @@ _:
 	; now check the signature to make sure it's a valid chain
 	ex de,hl
 	ld de,Sig_HMChains
-	; I don't think I even need to save this ...
-	; seems to work without it
-	;push bc				; [page before checking sig] [hook num] [ix] [ret addr]
 	
 	;	there aren't enough registers to do this in a loop
 	; can be opitimized later if needed
@@ -466,7 +475,6 @@ _:
 	
 _:
 	; the sig was bad, can't use it for a chain, bail out
-	;pop bc
 	pop af
 	pop ix
 	scf
@@ -474,39 +482,14 @@ _:
 	
 _:
 	; now b:hl points to the beginning of the offset table
+	ld (ix+wrTablePage),b		; need these later when stepping through
+	ld (ix+wrTableAddrL),l
+	ld (ix+wrTableAddrH),h
 	
-	; why am I popping this? it replaces the page we walked to with the original page...
-	; removed since I removed the push above to no apparent ill effects
-	;pop bc				; [hook num] [ix] [ret addr]
-	pop af				; [ix] [ret addr]
-	push af				; [hook num] [ix] [ret addr]
-	ld d,0
-	ld e,a
-	call BHL_plus_DE	; get offset into table for this hook
-	call ChainFetchByte
-	ld (ix+wrChainPage),b
-	ld (ix+wrHookBasepage),c			; ix+wrHookBasepage temporarily holds offset of head of chain
-	pop bc				; b: hook num c: old f		[ix] [ret addr]
-	ld a,MAX_HOOK
-	sub b
-	ld d,0
-	ld e,a
-	ld b,(ix+wrChainPage)
-	call BHL_plus_DE
-	; b:hl now points to the first hook chain node
-	ex de,hl			; h is still 0
-	ld l,(ix+wrHookBasepage)			; offset for head of chain
-	dec l				; the first offset is stored as 1 but it really needs to be 0 -- adjust everything back 1
-	push de				; [ptr in chain list] [ix] [ret addr]
-	ld d,h
-	ld e,l
-	add hl,hl			; multiply by 5 bytes per node
-	add hl,hl
-	add hl,de
-	pop de				; [ix] [ret addr]
-	ex de,hl
-	call BHL_plus_DE
-	; and how b:hl should be the first hook in the chain!
+	pop af				; a: hook num			[ix] [ret addr]
+	call findChain		; moved this code to a subroutine since it's needed to find relatives as well
+	
+	; b:hl should be first hook in the chain we are interested in
 	
 	ld (ix+wrChainPage),b
 	ld (ix+wrChainAddrL),l
@@ -518,6 +501,54 @@ _:
 	ccf				; make sure carry isn't set
 	ret
 
+
+;	findChain: Find the given chain in the list, if there is one.
+;	IN: a: chain number
+;	 ix+wrTable*: point to beginning of table
+;	OUT: b:hl: first node in chain
+;	 zero: set if no chain for given hook, b:hl is meaningless
+;	DESTROYS: a
+findChain:
+	push de
+	push af			; [hook num] [de] [ret addr]
+	ld d,0
+	ld e,a
+	ld b,(ix+wrTablePage)
+	ld h,(ix+wrTableAddrH)
+	ld l,(ix+wrTableAddrL)
+	
+	call BHL_plus_DE	; get offset into table for this hook
+	call ChainFetchByte
+	ld a,c
+	or a
+	ret z				; if there is no chain, ret with z
+	ld (ix+wrTemp1),b	; page we're looking at
+	ld (ix+wrTemp2),c	; offset of head of chain
+	pop bc				; b: hook num c: old f		[de] [ret addr]
+	ld a,MAX_HOOK
+	sub b
+	ld d,0
+	ld e,a
+	ld b,(ix+wrTemp1)
+	call BHL_plus_DE
+	; b:hl now points to the first hook chain node (of the first chain)
+	ex de,hl			; h is still 0
+	ld l,(ix+wrTemp2)	; offset for head of chain
+	dec l				; the first offset is stored as 1 but it really needs to be 0 -- adjust everything back 1
+	push de				; [ptr in chain list] [de] [ret addr]
+	ld d,h
+	ld e,l
+	add hl,hl			; multiply by 5 bytes per node
+	add hl,hl
+	add hl,de
+	pop de				; [de] [ret addr]
+	ex de,hl
+	call BHL_plus_DE
+	; and how b:hl should be the first hook in the chain!
+	
+	pop de
+	ret
+	
 
 
 ;	ChainNext: Pulls information about the next hook in the chain into RAM.
@@ -583,10 +614,43 @@ ChainVerify:
 ;		load them into the RAM blocks.
 ;		Also loads the next hook into the ram block for the active hook.
 ;			FIXME: Actually implement this. Always returns success.
+;			FIXME: Disable and conditionally enable interrupts around this routine,
+;					at least the parts that mess with the hook blocks.
 ;	IN: workram pointers set up properly
 ;	OUT: Nothing
 ;	DESTROYS: fixme
 ChainGetRelatives:
+	ld a,MAX_HOOK+1
+cgrNextHook:		; spasm only supports two levels of anonymous labels =\
+	dec a
+	push af
+	call findChain
+	jr z,+_			; no chain for this hook
+	
+	; we have a chain, now to look at the nodes in it
+	ld d,0
+	ld e,4			; we only want to skip 4 bytes! the first one is read
+cgrNextNode:
+	call ChainFetchByte
+	inc c
+	jr z,cgrEndHook		; if $FF we're done
+	dec c
+	ld a,c
+	cp (ix+wrHookBasepage)
+	jr nz,cgrEndNode
+	; this hook is from the same app as the one we're doing!
+	pop af
+	push af			; [hook] [ret]
+	
+	
+cgrEndNode:
+	call BHL_plus_DE
+	jr cgrNextNode
+	
+cgrEndHook:
+	pop af
+	;or a
+	jr nz,cgrNextHook
 	ret
 
 
