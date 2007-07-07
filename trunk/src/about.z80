@@ -27,8 +27,8 @@ About:
 	dec a
 	jp z,aboutAbout
 	dec a
-	jp z,aboutLicense
-	jp mainMenu
+	;jp z,aboutLicense
+	jp nz,mainMenu
 	
 aboutLicense:
 	bcall(_ClrLCDFull);
