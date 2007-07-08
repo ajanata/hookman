@@ -384,15 +384,11 @@ wrHookBasepage	.equ 4
 wrHookAddrL		.equ 5
 wrHookAddrH		.equ 6
 wrHookHookpage	.equ 7
-; the location of the head of the offset table
-; this is used to step through the offset table to step through chains,
-; looking for other hooks which belong to the current app we are chaining
-wrTablePage		.equ 8
-wrTableAddrL	.equ 9
-wrTableAddrH	.equ 10
-; unfortunately I need a couple more scratch bytes
-wrTemp1			.equ 11
-wrTemp2			.equ 12
+; the location of the first node in the chains appvar
+wrCheckPage		.equ 8
+wrCheckAddrL	.equ 9
+wrCheckAddrH	.equ 10
+
 
 
 
@@ -482,13 +478,43 @@ _:
 	
 _:
 	; now b:hl points to the beginning of the offset table
-	ld (ix+wrTablePage),b		; need these later when stepping through
-	ld (ix+wrTableAddrL),l
-	ld (ix+wrTableAddrH),h
+
 	
 	pop af				; a: hook num			[ix] [ret addr]
-	call findChain		; moved this code to a subroutine since it's needed to find relatives as well
-	
+	push af                         ; [hook num] [ix] [ret addr]
+    ld d,0
+    ld e,a
+    call BHL_plus_DE        ; get offset into table for this hook
+    call ChainFetchByte
+    ld (ix+wrChainPage),b
+    ld (ix+wrHookBasepage),c                        ; ix+wrHookBasepage temporarily holds offset of head of chain
+    pop bc                          ; b: hook num c: old f          [ix] [ret addr]
+    ld a,MAX_HOOK
+    sub b
+    ld d,0
+    ld e,a
+    ld b,(ix+wrChainPage)
+    call BHL_plus_DE
+    
+    ; b:hl now points to the first hook chain node
+    ld (ix+wrCheckPage),b		; need these later when stepping through
+	ld (ix+wrCheckAddrL),l
+	ld (ix+wrCheckAddrH),h
+    
+    ex de,hl                        ; h is still 0 after this
+    ld l,(ix+wrHookBasepage)                        ; offset for head of chain
+    dec l                           ; the first offset is stored as 1 but it really needs to be 0 -- adjust everything back 1
+    push de                         ; [ptr in chain list] [ix] [ret addr]
+    ld d,h
+    ld e,l
+    add hl,hl                       ; multiply by 6 bytes per node
+    add hl,hl
+    add hl,de
+    add hl,de
+    pop de                          ; [ix] [ret addr]
+    ex de,hl
+    call BHL_plus_DE
+
 	; b:hl should be first hook in the chain we are interested in
 	
 	ld (ix+wrChainPage),b
@@ -501,53 +527,6 @@ _:
 	ccf				; make sure carry isn't set
 	ret
 
-
-;	findChain: Find the given chain in the list, if there is one.
-;	IN: a: chain number
-;	 ix+wrTable*: point to beginning of table
-;	OUT: b:hl: first node in chain
-;	 zero: set if no chain for given hook, b:hl is meaningless
-;	DESTROYS: a
-findChain:
-	push de
-	push af			; [hook num] [de] [ret addr]
-	ld d,0
-	ld e,a
-	ld b,(ix+wrTablePage)
-	ld h,(ix+wrTableAddrH)
-	ld l,(ix+wrTableAddrL)
-	
-	call BHL_plus_DE	; get offset into table for this hook
-	call ChainFetchByte
-	ld a,c
-	or a
-	ret z				; if there is no chain, ret with z
-	ld (ix+wrTemp1),b	; page we're looking at
-	ld (ix+wrTemp2),c	; offset of head of chain
-	pop bc				; b: hook num c: old f		[de] [ret addr]
-	ld a,MAX_HOOK
-	sub b
-	ld d,0
-	ld e,a
-	ld b,(ix+wrTemp1)
-	call BHL_plus_DE
-	; b:hl now points to the first hook chain node (of the first chain)
-	ex de,hl			; h is still 0
-	ld l,(ix+wrTemp2)	; offset for head of chain
-	dec l				; the first offset is stored as 1 but it really needs to be 0 -- adjust everything back 1
-	push de				; [ptr in chain list] [de] [ret addr]
-	ld d,h
-	ld e,l
-	add hl,hl			; multiply by 5 bytes per node
-	add hl,hl
-	add hl,de
-	pop de				; [de] [ret addr]
-	ex de,hl
-	call BHL_plus_DE
-	; and how b:hl should be the first hook in the chain!
-	
-	pop de
-	ret
 	
 
 
@@ -562,7 +541,7 @@ ChainNext:
 	ld b,(ix+wrChainPage)
 	ld l,(ix+wrChainAddrL)
 	ld h,(ix+wrChainAddrH)
-	call ChainFetchByte
+	call ChainFetchByte	; chain number/end-of-chain flag byte
 	ld a,c
 	inc a				; end-of-chain marker is $FF
 	jr nz,+_
@@ -572,6 +551,7 @@ ChainNext:
 	ret
 	
 _:
+	call ChainFetchByte
 	ld (ix+wrHookBasepage),c
 	call ChainFetchByte
 	ld (ix+wrHookHookpage),c
@@ -616,41 +596,67 @@ ChainVerify:
 ;			FIXME: Actually implement this. Always returns success.
 ;			FIXME: Disable and conditionally enable interrupts around this routine,
 ;					at least the parts that mess with the hook blocks.
-;	IN: workram pointers set up properly
+;	IN: workram pointers set up properly - wrCheck*, wrHookBasepage
 ;	OUT: Nothing
 ;	DESTROYS: fixme
 ChainGetRelatives:
-	ld a,MAX_HOOK+1
-cgrNextHook:		; spasm only supports two levels of anonymous labels =\
-	dec a
-	push af
-	call findChain
-	jr z,+_			; no chain for this hook
+	push ix
+	ld ix,workram
+	ld b,(ix+wrCheckPage)
+	ld l,(ix+wrCheckAddrL)
+	ld h,(ix+wrCheckAddrH)
 	
-	; we have a chain, now to look at the nodes in it
-	ld d,0
-	ld e,4			; we only want to skip 4 bytes! the first one is read
-cgrNextNode:
-	call ChainFetchByte
-	inc c
-	jr z,cgrEndHook		; if $FF we're done
-	dec c
+_:
+	call ChainFetchByte			; hook num
 	ld a,c
-	cp (ix+wrHookBasepage)
-	jr nz,cgrEndNode
-	; this hook is from the same app as the one we're doing!
-	pop af
-	push af			; [hook] [ret]
+	cp $FE
+	jr z,cgrDone
+	call ChainFetchByte			; basepage
+	ld e,a
+	ld a,c
+	cp (ix+wrHookBasepage)		; optimize this for speed later, this is dirt slow but saves a reg
+	jr z,+_
+	; skip 4 bytes
+	call ChainFetchWord
+	call ChainFetchWord
+	jr -_						; go to next node
 	
-	
-cgrEndNode:
-	call BHL_plus_DE
-	jr cgrNextNode
-	
-cgrEndHook:
-	pop af
-	;or a
-	jr nz,cgrNextHook
+_:	; this node is on the same page, load it up into the ram block
+	; e is hook num
+	ld d,0
+	sla e		; mul by 2
+	push hl
+	ld hl,HookInfoLUT
+	add hl,de
+	; hl points to the LUT entry for this hook
+	bcall(_LdHLInd)
+	inc hl
+	bcall(_LdHLInd)
+	; now HL points to the RAM block
+	; need to put address then page
+	; which just so happens to be backwards from the chain
+	; this can probably be optimized a bit ... but this should work
+	ex de,hl
+	pop hl
+	call ChainFetchByte		; hook page
+	push bc
+	call ChainFetchByte		; low addr
+	ld a,c
+	ld (de),a
+	inc de
+	call ChainFetchByte		; high addr
+	ld a,c
+	ld (de),a
+	inc de
+	ld a,b
+	pop bc
+	ld b,a
+	ld a,c
+	ld (de),a
+	call ChainFetchByte		; app id, throw it away
+
+cgrDone:
+	pop ix
 	ret
 
 

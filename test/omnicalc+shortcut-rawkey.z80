@@ -32,12 +32,14 @@
 	
 	; rawkey hook chain
 	; omnicalc
+	.db 2
 	.db	$68		; basepage
 	.db $68		; hookpage
 	.dw $6270	; hookaddr
 	.db $00		; reserved
 	
 	; shortcut
+	.db 2
 	.db	$67		; basepage
 	.db $67		; hookpage
 	.dw $4189	; hookaddr
@@ -46,5 +48,9 @@
 	; end of chain
 	.db $FF
 	.db $00
+	.db $00
 	.dw $0000
 	.db $00
+	
+	; end of appvar
+	.db $FE

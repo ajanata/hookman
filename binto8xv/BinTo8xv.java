@@ -157,7 +157,7 @@ public class BinTo8xv {
 	
 	
 	private static void showHelp() {
-		System.out.println("Usage: java BinTo8xv <source.bin> <dest.8xv> <varnam> [\"42-char max Comment\"]");
+		System.out.println("Usage: java BinTo8xv <source.bin> <dest.8xv> <varname> [\"42-char max Comment\"]");
 		System.out.println();
 		System.out.println("The contents of source.bin (which may be any file of any format) are put, in");
 		System.out.println("their entirety, into dest.8xv, with the proper headers and checksums.");
