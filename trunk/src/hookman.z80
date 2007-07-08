@@ -98,6 +98,14 @@ mainMenu:
 	; kclear, kquit, k0-k4
 _:
 	bcall(_GetKey)
+	
+	; XXX DEBUG
+	;cp kEnter
+	;jr nz,mmNoDebug
+	;di
+	;halt
+
+mmNoDebug:
 	cp kClear
 	jr z,exit
 	cp kQuit
