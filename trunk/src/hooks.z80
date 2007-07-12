@@ -243,16 +243,17 @@ _:	; push all the registers again
 	push af
 	push de
 	push hl
-	;ld (ixbackup),ixl
-	;ld (ixbackup+1),ixh
-	call ChainRestoreHooks
+	; I don't think we need to do this between every hook we chain.
+	; That would complicate matters as I would have to find even more RAM to store the bits we need
+	; from the config appvar. If we just do it at the end we can tromp over workram
+	; since we don't need it anymore.
+	;call ChainRestoreHooks
 	jr --_
 
 
 _:	; we're done!
 	; need to restore our hook
-	; but not yet since we never actually change the hook block
-
+	call ChainRestoreHooks
 	jp exitHook
 
 	;pop hl
@@ -266,6 +267,7 @@ _:	; we're done!
 ;	SomethingBroke: Something along the way broke. Probably can't find the chain list
 ;		appvar, or it isn't a valid chain list, or something equally as fatal.
 ;		Throw shit in the air and make a commotion.
+;		Perhaps disable the hook that caused this so we don't have to clean up every time.
 ;			FIXME: Need to run a hook which does the bare minimum required for normal
 ;			operation. This will not be fun for the localize hook.
 ;	IN: Stack should be [hl] [de] [af] [bc] [ret addr]
@@ -285,18 +287,24 @@ exitHook:
 	pop de
 	pop af
 	pop bc
-	ret
+	ret				; this returns back to the OS after the hook
 
 
 	
 ;	Install the given hook number. Assumes that any current hook has
 ;	been saved if needed and also that there are hooks in the chain
 ;	that belong to this hook.
+;	Interrupts-safe. (Will disable interrupts while running but
+;	turn them back on if they were on when this routine was called.)
 ;	IN: a: Hook number to install.
 ;	OUT: hook is installed and enabled
 ;	DESTROYS: everything
 installHook:
+	ld b,a
+	ld a,i			; save interrupts status (iff2) into p/v flag
 	di				; so the old hook can't be run, if it's already active
+	push af			; [iff2] [ret]
+	ld a,b
 	ld hl,HookInfoLUT
 	ld de,hookCode
 	or a			; we need to skip our loop entirely for hook 0
@@ -341,6 +349,8 @@ __:
 	or (hl)			; set the bit for this hook
 	ld (hl),a		; store it back to the flag byte
 	; ... and I think we're done
+	pop af			; p/v set if interrupts were enabled before getting here
+	ret po			; po: checks to see if interrupts are OFF. pe for ON
 	ei
 	ret
 
@@ -663,19 +673,118 @@ cgrDone:
 
 
 ;	ChainRestoreHooks: Restores hooks loaded by ChainGetRelatives.
+;		Actually, just forcibly reloads all of our hooks.
 ;			FIXME: Actually implement this. Always returns success.
-;	IN: workram pointers set up properly
+;	IN: Nothing
 ;	OUT: Nothing
-;	DESTROYS: fixme
+;	DESTROYS: ALL
 ChainRestoreHooks:
 	; can't indiscriminately restore all of our hooks in case some aren't needed,
 	; as some hooks can't be stubbed away very easily
 	; probably should step through configuration appvar, looking for hooks we are
 	; supposed to be managing. of course that means the infrastructure for the
 	; configuration appvar has to be in place before this can be implemented...
+	call ChainGetConfig
 	ret
 
 
+;	ChainGetConfig: Loads the configuration appvar HMConfig to workram.
+;	IN: Nothing
+;	OUT: workram: data section of HMConfig appvar
+;		carry flag: Can't find config appvar. Can't really restore our hooks in that case.
+;	DESTROYS: Everything
+ChainGetConfig:
+	push ix				; [ix] [ret addr]
+	ld ix,workram
+	ld hl,AV_HMConfig
+	rst 20h				; rMOV9TOOP1
+	bcall(_ChkFindSym)
+	jr nc,+_
+	; not found
+	pop ix
+	ret
+_:
+	ld a,b			; page
+	or a
+	jr nz,+_		; in archive
+	; in ram, just copy from where it is to workram
+	; this will need reworking when there's another version of the config appvar =\
+	inc de
+	inc de				; get past size bytes
+	; size of a version 0 appvar is 5+3 (sig+flags)
+	; de is source
+	ld hl,workram
+	ex de,hl
+	push bc		; needed? probably not, can kill it later
+	ldi
+	ldi			;2
+	ldi
+	ldi			;4
+	ldi
+	ldi			;6
+	ldi			; faster to unroll
+	ldi			;8
+	pop bc
+	jr cgcCheckSig
+_:
+	; it's in archive, yay, happy fun time
+	ex de, hl			; I *think* not doing first ex de,hl, and putting 20 into hl, may work
+	ld de,20			; skip over data valid flag, data length, symbol entry copy,
+	call BHL_plus_DE	; name length, type byte, and name, to point to data
+	ld a,8
+	; ix is still workram
+_:
+	call LoadCIndPaged_inc
+	ld (ix+0),c
+	inc ix
+	dec a
+	jr nz,-_
+	ld ix,workram
+	
+	
+cgcCheckSig:
+	; now check the signature to make sure it's a valid chain
+	; de will point to the sig we are looking for,
+	; ix to the sig we are checking
+	ld de,Sig_HMConfig
+	
+	;1
+	ld a,(de)
+	cp (ix+0)
+	jr nz,+_
+	inc de
+	;2
+	ld a,(de)
+	cp (ix+1)
+	jr nz,+_
+	inc de
+	;3
+	ld a,(de)
+	cp (ix+2)
+	jr nz,+_
+	inc de
+	;4
+	ld a,(de)
+	cp (ix+3)
+	jr nz,+_
+	inc de
+	;5
+	ld a,(de)
+	cp (ix+4)
+	jr z,++_
+	
+_:
+	; the sig was bad, can't use it, bail out
+	pop ix
+	scf
+	ret
+
+_:
+	; workram+5 - workram+7 are the flags now
+	pop ix
+	scf
+	ccf
+	ret
 
 
 

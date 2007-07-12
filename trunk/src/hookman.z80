@@ -168,6 +168,8 @@ exit:
 ; About menu
 #include "about.z80"
 
+; Routines to manipulate configuration appvar.
+#include "configappvar.z80"
 
 ; Constant data (user interface strings, variable names, etc.).
 #include "strings.inc"
