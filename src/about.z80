@@ -31,7 +31,7 @@ About:
 	jp nz,mainMenu
 	
 aboutLicense:
-	bcall(_ClrLCDFull);
+	bcall(_ClrLCDFull)
 	ld hl,$0000
 	ld (penCol),hl
 	ld b,9
