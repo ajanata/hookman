@@ -89,6 +89,7 @@ licenseText:
 	.db "v2 or later. This program",0
 	.db "comes WITHOUT ANY",0
 	.db "WARRANTY. For details, see",0
+	; should probably change this to http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt eventually
 	.db "www",$FF,".gnu.",$FF,"or",$FF,"g",$FF,"/lic",$FF,"ens",$FF,"es/",$FF,"gp",$FF,"l.t",$FF,"x",$FF,"t",0
 	.db "Press Enter for more.",0
 	; second screen
