@@ -298,8 +298,9 @@ exitHook:
 ;	turn them back on if they were on when this routine was called.)
 ;	IN: a: Hook number to install.
 ;	OUT: hook is installed and enabled
-;	DESTROYS: everything
+;	DESTROYS: a, de, hl
 installHook:
+	push bc
 	ld b,a
 	ld a,i			; save interrupts status (iff2) into p/v flag
 	di				; so the old hook can't be run, if it's already active
@@ -349,6 +350,7 @@ __:
 	or (hl)			; set the bit for this hook
 	ld (hl),a		; store it back to the flag byte
 	; ... and I think we're done
+	pop bc
 	pop af			; p/v set if interrupts were enabled before getting here
 	ret po			; po: checks to see if interrupts are OFF. pe for ON
 	ei
@@ -685,6 +687,127 @@ ChainRestoreHooks:
 	; supposed to be managing. of course that means the infrastructure for the
 	; configuration appvar has to be in place before this can be implemented...
 	call ChainGetConfig
+	jp c,crhOhCrap
+	;push ix
+	;ld ix,workram+5			; we don't care about the signature
+	ld a,(workram+5)
+	ld b,a
+	
+	; I can't really think of a way to wrap this up into a loop.
+	; Any suggestions would be much appreciated.
+	
+	bit 0,b
+	jr z,+_
+	xor a
+	call installHook
+_:	bit 1,b
+	jr z,+_
+	ld a,1
+	call installHook
+_:	bit 2,b
+	jr z,+_
+	ld a,2
+	call installHook
+_:	bit 3,b
+	jr z,+_
+	ld a,3
+	call installHook
+_:	bit 4,b
+	jr z,+_
+	ld a,4
+	call installHook
+_:	bit 5,b
+	jr z,+_
+	ld a,5
+	call installHook
+_:	bit 6,b
+	jr z,+_
+	ld a,6
+	call installHook
+_:	bit 7,b
+	jr z,+_
+	ld a,7
+	call installHook
+	
+_:	ld a,(workram+6)
+	ld b,a
+	bit 0,b
+	jr z,+_
+	ld a,8
+	call installHook
+_:	bit 1,b
+	jr z,+_
+	ld a,9
+	call installHook
+_:	bit 2,b
+	jr z,+_
+	ld a,10
+	call installHook
+_:	bit 3,b
+	jr z,+_
+	ld a,11
+	call installHook
+_:	bit 4,b
+	jr z,+_
+	ld a,12
+	call installHook
+_:	bit 5,b
+	jr z,+_
+	ld a,13
+	call installHook
+_:	bit 6,b
+	jr z,+_
+	ld a,14
+	call installHook
+_:	bit 7,b
+	jr z,+_
+	ld a,15
+	call installHook
+
+_:	ld a,(workram+7)
+	ld b,a
+	bit 0,b
+	jr z,+_
+	ld a,16
+	call installHook
+_:	bit 1,b
+	jr z,+_
+	ld a,17
+	call installHook
+_:	bit 2,b
+	jr z,+_
+	ld a,18
+	call installHook
+_:	bit 3,b
+	jr z,+_
+	ld a,19
+	call installHook
+_:	bit 4,b
+	jr z,+_
+	ld a,20
+	call installHook
+_:	bit 5,b
+	jr z,+_
+	ld a,21
+	call installHook
+_:	bit 6,b
+	jr z,+_
+	ld a,22
+	call installHook
+_:	
+	; ugh. what a waste of space.
+	
+	
+	
+	;pop ix
+	ret
+
+
+	; Couldn't load the config appvar for some reason, either not there or bad version
+	; At the very least we can't reload our hooks, and maybe we should disable all the
+	; other hooks as well.
+crhOhCrap:
+	; FIXME -- should do something here, I think. Or maybe just fail silently. I don't know.
 	ret
 
 
@@ -692,6 +815,7 @@ ChainRestoreHooks:
 ;	IN: Nothing
 ;	OUT: workram: data section of HMConfig appvar
 ;		carry flag: Can't find config appvar. Can't really restore our hooks in that case.
+;			Turn all hooks off?
 ;	DESTROYS: Everything
 ChainGetConfig:
 	push ix				; [ix] [ret addr]
