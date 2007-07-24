@@ -35,6 +35,55 @@
 
 start:
 	; put initialization stuff here
+	ld hl,AV_HMConfig
+	rst 20h		; rMOV9TOOP1
+	bcall(_ChkFindSym)
+	jr nc,start2
+	; config appvar not found - show license and make it
+	; possibly show brief description as well
+	call aboutLicense
+	
+	; check to make sure we have enough memory for the appvar
+	ld hl,25			; I think this is right
+	bcall(_EnoughMem)
+	jr nc,+_
+	
+	; crap, not enough RAM.
+	ld hl,errLowMem
+	call PutS
+	bcall(_GetKey)
+	jp exit
+	
+	
+_:	; now make the appvar
+	ld hl,AV_HMConfig
+	rst 20h			; rMOV9TOOP1
+	ld hl,8			; config appvar is currently 8 bytes of data
+	bcall(_CreateAppVar)
+	ld hl,Sig_HMConfig
+	inc de
+	inc de			; get past size bytes
+	ldi
+	ldi
+	ldi				; 5 bytes of signature
+	ldi
+	ldi
+	xor a
+	ld (de),a		; 3 bytes of managed hooks - default to none
+	inc de
+	ld (de),a
+	inc de
+	ld (de),a
+	ld hl,AV_HMConfig
+	rst 20h			; rMOV9TOOP1
+	call SafeArc
+	
+	
+	
+	; config appvar exists
+start2:
+	
+	
 mainMenu:
 	bcall(_ClrLCDFull)
 	set textInverse,(iy+textFlags)
@@ -62,7 +111,7 @@ mainMenu:
 	call VPutS
 	ld hl,$2505
 	ld (penCol),hl
-	ld hl,menuNumbers+(3*0)
+	ld hl,menuNumbers+(3*5)
 	call VPutS
 
 	; put the text after the numbers
@@ -110,9 +159,7 @@ mmNoDebug:
 	jr z,exit
 	cp kQuit
 	jr z,exit
-	sub k0
-	jr z,exit
-	dec a
+	sub k1
 	jr z,InstallUninstall
 	dec a
 	jr z,advancedMenu
@@ -120,6 +167,8 @@ mmNoDebug:
 	jr z,helpMenu
 	dec a
 	jp z,About
+	dec a
+	jr z,exit
 	jp -_
 
 

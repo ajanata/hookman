@@ -78,7 +78,7 @@ VPutSC:
 	
 
 ;	Menu: Displays a menu on the screen defined by an information block. Handles kQuit
-;	by jumping to exit; kClear is returned as k0 (which is always displayed as Back).
+;	by jumping to exit; kClear is returned as k[n+1] (which is always displayed as Back).
 ;	IN: (hl): pointer to a menu information block (see below)
 ;	OUT: a: menu item number selected [1, menuitems+1]
 ;	DESTROYS: everything

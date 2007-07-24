@@ -30,6 +30,11 @@ About:
 	;jp z,aboutLicense
 	jp nz,mainMenu
 	
+	; aboutLicense is called from the init if the config appvar isn't found
+	; since we got to it this way we need a valid ret addr for it
+	; this is 6 t-states faster than call/ret from here, same size
+	ld hl,mainMenu
+	push hl
 aboutLicense:
 	bcall(_ClrLCDFull)
 	ld hl,$0000
@@ -64,7 +69,8 @@ _:
 	
 	bcall(_GetKey)
 
-	jp mainMenu	
+	ret
+	;jp mainMenu	
 
 
 
@@ -80,22 +86,3 @@ aboutMenu:
 	.db "About",0
 	.db "License",0
 
-;	license and source code acquisition information text
-licenseText:
-	.db "This pr",$FF,"o",$FF,"gr",$FF,"am is fr",$FF,"e",$FF,"e softwar",$FF,"e;",0
-	.db "y",$FF,"ou c",$FF,"an r",$FF,"edistribute it and/or",0
-	.db "modify it under the terms of",0
-	.db "the GNU Gener",$FF,"a",$FF,"l Pub",$FF,"lic Lic",$FF,"e",$FF,"nse",0
-	.db "v2 or later. This program",0
-	.db "comes WITHOUT ANY",0
-	.db "WARRANTY. For details, see",0
-	; should probably change this to http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt eventually
-	.db "www",$FF,".gnu.",$FF,"or",$FF,"g",$FF,"/lic",$FF,"ens",$FF,"es/",$FF,"gp",$FF,"l.t",$FF,"x",$FF,"t",0
-	.db "Press Enter for more.",0
-	; second screen
-	.db "Source code is available at",0
-	.db "c",$FF,"ode.goo",$FF,"gle.c",$FF,"om/p",$FF,"/hookman",0
-	.db "or by writing to Andy Janata,",0
-	.db "178 E. 5th St, Brewster, OH,",0
-	.db "44613, USA.",0
-	.db "Pr",$FF,"ess Ent",$FF,"er t",$FF,"o r",$FF,"eturn t",$FF,"o menu.",0
