@@ -19,11 +19,10 @@
 ;	 or by writing to Andy Janata, 178 E. 5th St., Brewster, OH 44613 USA.
 
 
-AV_HMConfig:
-	.db	AppVarObj, "HMConfig"
-Sig_HMConfig:
-	.db "HMCF",0			; that is a version byte, not a null-terminator
+
 	
+
+
 
 
 ; The rest of this will be fleshed out later

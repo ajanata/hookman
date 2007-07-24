@@ -32,6 +32,16 @@ titleAdvanced:
 	.db "    Advanced    ",0
 titleHelp:
 	.db "      Help      ",0
+errLowMem:
+	.db "There is insuf- "
+	.db "ficient free RAM"
+	.db "to store the    "
+	.db "configuration   "
+	.db "file. Please en-"
+	.db "sure 25 bytes of"
+	.db "RAM are free.   "
+	.db "Press any key...",0
+
 	
 itemUninstall:	.db "Uninstall",0
 itemInstall:	.db "Install",0
@@ -42,7 +52,8 @@ itemExit		.db "Exit",0
 itemBack		.db "Back",0
 
 txtCopyright	.db "Copyright (",$FF,"c) '07 Andy Janata",0
-	
+
+
 menuNumbers:
 	.db "0)",0
 	.db "1)",0
@@ -54,3 +65,43 @@ menuNumbers:
 	.db "7)",0
 	.db "8)",0
 	.db "9)",0
+
+
+;	about screen
+
+
+;	license and source code acquisition information text
+licenseText:
+	.db "This pr",$FF,"o",$FF,"gr",$FF,"am is fr",$FF,"e",$FF,"e softwar",$FF,"e;",0
+	.db "y",$FF,"ou c",$FF,"an r",$FF,"edistribute it and/or",0
+	.db "modify it under the terms of",0
+	.db "the GNU Gener",$FF,"a",$FF,"l Pub",$FF,"lic Lic",$FF,"e",$FF,"nse",0
+	.db "v2 or later. This program",0
+	.db "comes WITHOUT ANY",0
+	.db "WARRANTY. For details, see",0
+	; should probably change this to http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt eventually
+	; of course good luck making that fit
+	.db "www",$FF,".gnu.",$FF,"or",$FF,"g",$FF,"/lic",$FF,"ens",$FF,"es/",$FF,"gp",$FF,"l.t",$FF,"x",$FF,"t",0
+	.db "Press Enter for more.",0
+	; second screen
+	.db "Source code is available at",0
+	.db "c",$FF,"ode.goo",$FF,"gle.c",$FF,"om/p",$FF,"/hookman",0
+	.db "or by writing to Andy Janata,",0
+	.db "178 E. 5th St, Brewster, OH,",0
+	.db "44613, USA.",0
+	.db "Press Enter to continue.",0
+
+
+; appvars
+; chain list
+AV_HMChains:
+	.db AppVarObj, "HMChains"
+Sig_HMChains:
+	.db "HMCL",0			; this is not a null-terminator: it is a version byte
+
+; main config
+AV_HMConfig:
+	.db	AppVarObj, "HMConfig"
+Sig_HMConfig:
+	.db "HMCF",0			; that is a version byte, not a null-terminator
+

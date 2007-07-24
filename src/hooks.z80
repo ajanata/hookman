@@ -404,10 +404,7 @@ wrCheckAddrH	.equ 10
 
 
 
-AV_HMChains:
-	.db AppVarObj, "HMChains"
-Sig_HMChains:
-	.db "HMCL",0			; this is not a null-terminator: it is a version byte
+
 
 
 ;	ChainInit: Initializes pointers for walking the hook chain
