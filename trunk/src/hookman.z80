@@ -38,7 +38,7 @@ start:
 	ld hl,AV_HMConfig
 	rst 20h		; rMOV9TOOP1
 	bcall(_ChkFindSym)
-	jr nc,start2
+	jr nc,mainMenu
 	; config appvar not found - show license and make it
 	; possibly show brief description as well
 	call aboutLicense
@@ -80,10 +80,7 @@ _:	; now make the appvar
 	
 	
 	
-	; config appvar exists
-start2:
-	
-	
+	; config appvar exists, show the main menu	
 mainMenu:
 	bcall(_ClrLCDFull)
 	set textInverse,(iy+textFlags)
@@ -117,7 +114,14 @@ mainMenu:
 	; put the text after the numbers
 	ld hl,$0910
 	ld (penCol),hl
+	
+	call AnyHooksInstalled
+	jr z,+_
+	ld hl,itemUninstall
+	jr ++_
+_:
 	ld hl,itemInstall
+_:
 	call VPutS
 	ld hl,$1010
 	ld (penCol),hl
@@ -202,6 +206,8 @@ menuStub:
 asdf: .db "Not implemented",0
 
 exit:
+	; TODO: make sure our appvars are archived
+	; TODO: Go back through the config appvar and make sure our hooks are installed.
 	bjump(_JForceCmdNoChar)
 
 
@@ -217,7 +223,7 @@ exit:
 ; About menu
 #include "about.z80"
 
-; Routines to manipulate configuration appvar.
+; Routines for manipulating the configuration appvar
 #include "configappvar.z80"
 
 ; Constant data (user interface strings, variable names, etc.).
@@ -229,4 +235,4 @@ exit:
 
 ; various equates needed...
 _OffPageJump		.equ	$44F2
-	
+_FlashToRAM2		.equ	$8054	
