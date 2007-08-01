@@ -105,3 +105,12 @@ AV_HMConfig:
 Sig_HMConfig:
 	.db "HMCF",0			; that is a version byte, not a null-terminator
 
+; application database
+AV_HMDatbas:
+	.db AppVarObj, "HMDatbas"
+Sig_HMDatbase:
+	.db "HMDB",0			; version again
+	
+	
+	
+	
