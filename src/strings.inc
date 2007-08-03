@@ -41,7 +41,18 @@ errLowMem:
 	.db "sure 25 bytes of"
 	.db "RAM are free.   "
 	.db "Press any key...",0
+errBadCfg:
+	.db "The config file "
+	.db "HMConfig is in- "
+	.db "valid. Please   "
+	.db "delete it or re-"
+	.db "name it if it is"
+	.db "something you   "
+	.db "need. Press any "
+	.db "key...",0
 
+msgHooksInstalled:
+	.db "These hooks were installed:",0
 	
 itemUninstall:	.db "Uninstall",0
 itemInstall:	.db "Install",0

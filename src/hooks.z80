@@ -198,9 +198,8 @@ hookUSBActivity:
 ;	Actually process the hook.
 ;	IN: b: Hook identification number (see defines in hooklist.inc).
 ;	   top of stack: Old bc to pass to the real hook.
-doHook:
-	; this dummy hook will not work for all of the different hooks!
-	
+;	FIXME: save ix
+doHook:	
 	; STACK: [bc] [ret addr]
 	push af
 	push de
@@ -211,7 +210,7 @@ doHook:
 	;ld (ixbackup+1),h
 	; [hl] [de] [af] [bc] [ret addr]
 	ld a,b
-	ld ($FFFF),a			; store the hook number to $FFFF for use later(?)
+	ld ($FFFF),a			; store the hook number to $FFFF for use later
 	call ChainInit
 	jp c,SomethingBroke
 _:
@@ -324,11 +323,13 @@ _:
 	djnz -_
 __:
 	; now hl points to the entry in the LUT and de points to the code for that hook
-	bcall(_LdHLInd)
+	;bcall(_LdHLInd)
+	call LdHLInd
 	; now hl points to the actual information block for the hook
 	inc hl
 	push hl
-	bcall(_LdHLInd)		; yay pointer to a pointer!
+	;bcall(_LdHLInd)		; yay pointer to a pointer!
+	call LdHLInd
 	; and now, finally, hl points to the hook block in RAM
 	; de still points to the address of our hook handler
 	ld (hl),e
@@ -357,7 +358,63 @@ __:
 	ret
 
 
-
+;	Uninstall the given hook number.
+;	Interrupts-safe. (Will disable interrupts while running but
+;	turn them back on if they were on when this routine was called.)
+;	IN: a: Hook number to uninstall.
+;	OUT: OS hook block is cleared and disabled
+;	DESTROYS: a, de, hl
+uninstallHook:
+	push bc
+	ld b,a
+	ld a,i			; save interrupts status (iff2) into p/v flag
+	di				; so the old hook can't be run, if it's already active
+	push af			; [iff2] [ret]
+	ld a,b
+	ld hl,HookInfoLUT
+	or a			; we need to skip our loop entirely for hook 0
+	jp z,++_
+	ld b,a
+_:
+	inc hl			; the LUT has 2-byte entries
+	inc hl
+	djnz -_
+_:
+	; now hl points to the entry in the LUT
+	;bcall(_LdHLInd)
+	call LdHLInd
+	; now hl points to the actual information block for the hook
+	inc hl
+	push hl
+	;bcall(_LdHLInd)		; yay pointer to a pointer!
+	call LdHLInd
+	; and now, finally, hl points to the hook block in RAM
+	xor a
+	ld b,4
+_:					; clear OS hook block
+	ld (hl),a
+	inc hl
+	djnz -_
+	
+	pop hl			; hl points to the ram block address in the hook info block now
+	inc hl			; move past ram block address
+	inc hl
+	ld b,0
+	ld c,(hl)		; bc now has the flags offset
+	ex de,hl		; de points to flag offset byte in hook info block, hl is junk
+	ld hl,flags
+	add hl,bc		; hl points to the flag byte
+	inc de			; de points to bitmask for hook enable flag
+	ld a,(de)		; load the bitmask TO ENABLE HOOK into a
+	cpl				; now the bitmask to only leave other bits set :)
+	and (hl)		; clear the bit for this hook
+	ld (hl),a		; store it back to the flag byte
+	; ... and I think we're done
+	pop bc
+	pop af			; p/v set if interrupts were enabled before getting here
+	ret po			; po: checks to see if interrupts are OFF. pe for ON
+	ei
+	ret	
 
 
 ; Routines for getting hook chain stuff:
@@ -602,7 +659,6 @@ ChainVerify:
 ;	ChainGetRelatives: Get all other hooks from the same app as the next in the chain and
 ;		load them into the RAM blocks.
 ;		Also loads the next hook into the ram block for the active hook.
-;			FIXME: Actually implement this. Always returns success.
 ;			FIXME: Disable and conditionally enable interrupts around this routine,
 ;					at least the parts that mess with the hook blocks.
 ;	IN: workram pointers set up properly - wrCheck*, wrHookBasepage
@@ -638,9 +694,16 @@ _:	; this node is on the same page, load it up into the ram block
 	ld hl,HookInfoLUT
 	add hl,de
 	; hl points to the LUT entry for this hook
-	bcall(_LdHLInd)
+	;bcall(_LdHLInd)
+	call LdHLInd
 	inc hl
-	bcall(_LdHLInd)
+	;bcall(_LdHLInd)
+	call LdHLInd
+	
+	ld a,i
+	push af				; store iff2
+	di
+	
 	; now HL points to the RAM block
 	; need to put address then page
 	; which just so happens to be backwards from the chain
@@ -664,6 +727,11 @@ _:	; this node is on the same page, load it up into the ram block
 	ld (de),a
 	call ChainFetchByte		; app id, throw it away
 
+	pop af
+	jp po,+_
+	ei
+_:
+
 cgrDone:
 	pop ix
 	ret
@@ -673,7 +741,6 @@ cgrDone:
 
 ;	ChainRestoreHooks: Restores hooks loaded by ChainGetRelatives.
 ;		Actually, just forcibly reloads all of our hooks.
-;			FIXME: Actually implement this. Always returns success.
 ;	IN: Nothing
 ;	OUT: Nothing
 ;	DESTROYS: ALL
