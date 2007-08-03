@@ -216,6 +216,247 @@ LoadDEIndPaged_inc:
 	jr -_
 	
 	
+;	CheckSig: checks the signature of an appvar.
+;	IN: de: pointer to appvar header
+;		hl: pointer to known signature
+;	OUT: zero: bad sig
+;	DESTROYS: a, de, hl
+CheckSig:
+	; 1
+	ld a,(de)
+	cp (hl)
+	jr nz,+_
+	inc de
+	inc hl
+	
+	; 2
+	ld a,(de)
+	cp (hl)
+	jr nz,+_
+	inc de
+	inc hl
+	
+	; 3
+	ld a,(de)
+	cp (hl)
+	jr nz,+_
+	inc de
+	inc hl
+	
+	; 4
+	ld a,(de)
+	cp (hl)
+	jr nz,+_
+	inc de
+	inc hl
+	
+	; 5
+	ld a,(de)
+	cp (hl)
+	jr z,++_
+
+_:
+	; bad signature
+	xor a
+	ret
+	
+_:
+	; good signature
+	xor a
+	inc a
+	ret
+	
+	
+;	LdHLInd: Loads the word at (hl) into hl. Equivalent to _LdHLInd.
+;	IN: hl: address of word
+;	OUT: hl: word at old value of hl
+;	DESTROYS: none
+LdHLInd:
+	push af
+	ld a,(hl)
+	inc hl
+	ld h,(hl)
+	ld l,a
+	pop af
+	ret
+
+;	GetHookName: Takes the hook number given in a and puts the name of the hook in OP3 (null-terminated).
+;		May extend into OP4 depending on the hook.
+;	IN: a: hook number
+;	OUT: OP3: null-terminated hook name string
+;	DESTROYS: de, hl
+GetHookName:
+	add a,a			; double to get offset into LUT
+	ld hl,HookInfoLUT
+	ld e,a
+	ld d,0
+	add hl,de
+	call LdHLInd
+	; hl points to start of the hook's info block
+	; add 5 to skip over the other information to get to the name
+	ld de,5
+	add hl,de
+	ld de,OP3
+_:
+	ld a,(hl)
+	ld (de),a
+	or a
+	ret z				; <-- exit point. you will hit the null terminator sooner or later
+	inc hl
+	inc de
+	jr -_
+
+
+
+;	InitNameList: Clears the offsets list so GetHookNameAndPutInList functions properly.
+;	IN: None
+;	OUT: tempSwapArea's first MAX_HOOK+1 bytes are set to 0.
+;	DESTROYS: none
+InitNameList:
+	push af
+	push bc
+	push hl
+	xor a
+	ld b,MAX_HOOK+1
+	ld hl,tempSwapArea
+_:
+	ld (hl),a
+	inc hl
+	djnz -_
+	ld (appBackUpScreen),a
+	pop hl
+	pop bc
+	pop af
+	ret
+
+;	GetHookNameAndPutInList: Gets the name of the hook specified and adds it to a list of hook names.
+;		There are two lists stored: One of offsets (one byte per hook in list) and one of names
+;		(variable length per hook). The offsets list is stored at tempSwapArea, and the strings at
+;		appBackUpScreen. CALL InitNameList BEFORE THE FIRST CALL TO THIS ROUTINE!
+;	IN: a: hook to add to list
+;	OUT: hook name added to list; a=0
+;	DESTROYS: a
+GetHookNameAndPutInList:
+	di
+	push hl
+	push de
+	push bc
+	call GetHookName
+	ld hl,tempSwapArea
+_:
+	ld a,(hl)
+	inc hl
+	or a
+	jr nz,-_
+	dec hl
+	; I think this ld a is not needed
+	ld a,(hl)			; offset of the last string in the list
+	push hl				; [offset ptr] [ret]
+	ld hl,appBackUpScreen
+	ld e,a
+	ld d,0
+	add hl,de
+	xor a
+	ld bc,$FFFF
+	cpir				; look for the null terminator
+	; now hl points to where to put this string
+	ld de,OP3
+	push hl				; [string ptr] [offset ptr] [ret]
+_:
+	ld a,(de)
+	ld (hl),a
+	inc hl
+	inc de
+	or a
+	jr nz,-_
+	
+	; string is copied to the strings list
+	pop hl				; [offset ptr] [ret]
+	ld de,appBackUpScreen
+	scf
+	ccf
+	sbc hl,de			; offset of string
+	ld a,l
+	pop hl
+	push hl
+	ld de,tempSwapArea
+	scf
+	ccf
+	sbc hl,de
+	pop hl
+	jr z,+_
+	inc hl				; skip this if it's the first string
+_:
+	ld (hl),a
+	
+	pop bc
+	pop de
+	pop hl
+	ei
+	xor a
+	ret
+	
+	
+
+;	DisplayScrollList: Shows a header and a scroll list of strings (set up using GetHookNameAndPutInList).
+;	IN: hl: Header
+;		tempSwapArea: null-terminated list of offsets in appBackUpScreen of strings
+;	OUT: none
+;	DESTROYS:
+DisplayScrollList:
+	push hl
+	ld hl,0
+	ld (penCol),hl
+	pop hl
+	call VPutS
+	
+	; we can get 9 lines of text that we are scrolling on the screen at once
+	
+	ld hl,tempSwapArea
+	ld b,0
+_:
+	ld a,(hl)
+	or a
+	jr z,+_
+	inc b			; count of items
+	inc hl
+	jr -_
+_:
+	ld c,0			; scroll position
+
+dslLoop:
+	ld hl,$0700
+	ld (penCol),hl
+	ld hl,tempSwapArea
+	ld d,0
+	ld e,c
+	add hl,de
+	ld e,(hl)
+	push hl
+	ld hl,appBackUpScreen
+	add hl,de
+	pop ix
+	; hl points to the string, ix points to the offset (for checking end of list)
+	; b is count of items in list, c is scroll position
+	; use d for how many items we have shown so far
+	ld d,0
+_:
+	call VPutS
+	ld a,(penRow)
+	add a,6
+	ld (penRow),a
+	xor a
+	ld (penCol),a
 	
 	
 	
+	bcall(_GetKey)
+	ret
+	
+	
+
+
+
+
+
+

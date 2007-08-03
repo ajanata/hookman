@@ -19,36 +19,18 @@
 ;	 or by writing to Andy Janata, 178 E. 5th St., Brewster, OH 44613 USA.
 
 
-;	Routines for accessing the configuration appvar.
+;	Routines for accessing the hook chain appvar.
 ; 	These are only safe to use in "normal" parts of the application, not in hooks!
 ;	They use RAM at will.
 
 
-;	AnyHooksInstalled: Checks to see if we have any hooks installed.
-;	IN: None.
-;	OUT: zero: no hooks installed, or config appvar not found (which should
-;			never be the case anyway)
-;	DESTROYS: All.
-AnyHooksInstalled:
-	call cfgToAppData
-	ret z
-	push ix
-	xor a
-	ld ix,appData
-	or (ix+5)		; 0-4 are the signature
-	or (ix+6)
-	or (ix+7)
-	pop ix
-	ret
-	
-	
-	
-;	cfgToAppData: Copies the configuration appvar's signature and data to (appData).
-;	IN: None.
-;	OUT: zero: appvar not found or signature invalid.
-;	DESTROYS: FIXME
-cfgToAppData:
-	ld hl,AV_HMConfig
+;	cavHeaderToAppData: Copies the header and offset list from HMChains to appData.
+;	IN: none
+;	OUT: appData contains 5 + MAX_HOOK+1 bytes from HMChains
+;		zero: HMChains not found or invalid
+;	DESTROYS: all
+cavHeaderToAppData:
+	ld hl,AV_HMChains
 	rst 20h
 	bcall(_ChkFindSym)
 	jr nc,+_
@@ -57,68 +39,70 @@ cfgToAppData:
 _:
 	xor a
 	cp b
-	jr z,ctadRam			; appvar is in ram, just copy it
+	jr z,chtadRam			; appvar is in ram, just copy it
 	
 	; archived so flashtoram it
 	ex de, hl			; I *think* not doing first ex de,hl, and putting 20 into hl, may work
 	ld de,20			; skip over data valid flag, data length, symbol entry copy,
 	call BHL_plus_DE_force	; name length, type byte, and name, to point to data
 	ld a,b
-	ld bc,8				; 5 byte signature + 3 data bytes
+	ld bc,5+MAX_HOOK+1		; 5 byte signature MAX_HOOK+1 entries in table
 	ld de,appData
 	bcall(_FlashToRAM)
 	jr +_
 
-ctadRam:
+chtadRam:
 	ex de,hl
 	inc hl
 	inc hl
 	ld de,appData
-	ld bc,8
+	ld bc,5+MAX_HOOK+1
 	ldir				; 5 byte signature + 3 data bytes
 _:			
 	; (appData) contains the start of the signature
 	ld de,appData
-	ld hl,Sig_HMConfig
-	; fall through
-	jp CheckSig
+	ld hl,Sig_HMChains
 	
-	
-
-
-;	cfgCreate: Creates the configuration appvar HMConfig.
-;		Checks to make sure enough memory is available.
-;	IN: none
-;	OUT: HMConfig created and defaulted to no hooks active
-;		carry: not enough ram
-;	DESTROYS: all (FIXME?)
-cfgCreate:
-	; check to make sure we have enough memory for the appvar
-	ld hl,25			; I think this is right
-	bcall(_EnoughMem)
-	ret c
-	
-	ld hl,AV_HMConfig
-	rst 20h			; rMOV9TOOP1
-	ld hl,8			; config appvar is currently 8 bytes of data
-	bcall(_CreateAppVar)
-	ld hl,Sig_HMConfig
+	; 1
+	ld a,(de)
+	cp (hl)
+	jr nz,+_
 	inc de
-	inc de			; get past size bytes
-	ldi
-	ldi
-	ldi				; 5 bytes of signature
-	ldi
-	ldi
+	inc hl
+	
+	; 2
+	ld a,(de)
+	cp (hl)
+	jr nz,+_
+	inc de
+	inc hl
+	
+	; 3
+	ld a,(de)
+	cp (hl)
+	jr nz,+_
+	inc de
+	inc hl
+	
+	; 4
+	ld a,(de)
+	cp (hl)
+	jr nz,+_
+	inc de
+	inc hl
+	
+	; 5
+	ld a,(de)
+	cp (hl)
+	jr z,++_
+
+_:
+	; bad signature
 	xor a
-	ld (de),a		; 3 bytes of managed hooks - default to none
-	inc de
-	ld (de),a
-	inc de
-	ld (de),a
-	ld hl,AV_HMConfig
-	rst 20h			; rMOV9TOOP1
-	call SafeArc
-	scf
-	ccf
 	ret
+	
+_:
+	; good signature
+	xor a
+	inc a
+	ret		
