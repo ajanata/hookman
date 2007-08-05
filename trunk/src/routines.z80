@@ -310,7 +310,7 @@ _:
 
 ;	InitNameList: Clears the offsets list so GetHookNameAndPutInList functions properly.
 ;	IN: None
-;	OUT: tempSwapArea's first MAX_HOOK+1 bytes are set to 0.
+;	OUT: appBackUpScreen+400's first MAX_HOOK+1 bytes are set to 0.
 ;	DESTROYS: none
 InitNameList:
 	push af
@@ -318,12 +318,14 @@ InitNameList:
 	push hl
 	xor a
 	ld b,MAX_HOOK+1
-	ld hl,tempSwapArea
+	ld hl,appBackUpScreen+400
 _:
 	ld (hl),a
 	inc hl
 	djnz -_
 	ld (appBackUpScreen),a
+	inc a
+	ld (appBackUpScreen+400),a
 	pop hl
 	pop bc
 	pop af
@@ -331,7 +333,7 @@ _:
 
 ;	GetHookNameAndPutInList: Gets the name of the hook specified and adds it to a list of hook names.
 ;		There are two lists stored: One of offsets (one byte per hook in list) and one of names
-;		(variable length per hook). The offsets list is stored at tempSwapArea, and the strings at
+;		(variable length per hook). The offsets list is stored at appBackUpScreen+400, and the strings at
 ;		appBackUpScreen. CALL InitNameList BEFORE THE FIRST CALL TO THIS ROUTINE!
 ;	IN: a: hook to add to list
 ;	OUT: hook name added to list; a=0
@@ -342,12 +344,13 @@ GetHookNameAndPutInList:
 	push de
 	push bc
 	call GetHookName
-	ld hl,tempSwapArea
+	ld hl,appBackUpScreen+400
 _:
 	ld a,(hl)
 	inc hl
 	or a
 	jr nz,-_
+	dec hl
 	dec hl
 	; I think this ld a is not needed
 	ld a,(hl)			; offset of the last string in the list
@@ -356,12 +359,9 @@ _:
 	ld e,a
 	ld d,0
 	add hl,de
-	xor a
-	ld bc,$FFFF
-	cpir				; look for the null terminator
-	; now hl points to where to put this string
+	inc hl
+	; now hl points to where to put the string
 	ld de,OP3
-	push hl				; [string ptr] [offset ptr] [ret]
 _:
 	ld a,(de)
 	ld (hl),a
@@ -369,38 +369,28 @@ _:
 	inc de
 	or a
 	jr nz,-_
-	
-	; string is copied to the strings list
-	pop hl				; [offset ptr] [ret]
+	; string is put in the list
 	ld de,appBackUpScreen
 	scf
 	ccf
-	sbc hl,de			; offset of string
+	sbc hl,de
 	ld a,l
 	pop hl
-	push hl
-	ld de,tempSwapArea
-	scf
-	ccf
-	sbc hl,de
-	pop hl
-	jr z,+_
-	inc hl				; skip this if it's the first string
-_:
+	inc hl
 	ld (hl),a
 	
 	pop bc
 	pop de
 	pop hl
-	ei
 	xor a
-	ret
+	ei
+	ret	
 	
 	
 
 ;	DisplayScrollList: Shows a header and a scroll list of strings (set up using GetHookNameAndPutInList).
 ;	IN: hl: Header
-;		tempSwapArea: null-terminated list of offsets in appBackUpScreen of strings
+;		appBackUpScreen+400: null-terminated list of offsets in appBackUpScreen of strings
 ;	OUT: none
 ;	DESTROYS:
 DisplayScrollList:
@@ -412,7 +402,7 @@ DisplayScrollList:
 	
 	; we can get 9 lines of text that we are scrolling on the screen at once
 	
-	ld hl,tempSwapArea
+	ld hl,appBackUpScreen+400
 	ld b,0
 _:
 	ld a,(hl)
@@ -422,37 +412,107 @@ _:
 	inc hl
 	jr -_
 _:
+	dec b			; it counts one too many due to the way it is set up
 	ld c,0			; scroll position
+	xor a
+	ld (hl),a		; the last offset is a junk one, so write over it
 
 dslLoop:
+	ld hl,$0001
+	ld (curRow),hl
+	push bc
+	ld b,7*16
+	ld a,' '
+_:
+	bcall(_PutC)	; clear all but top line of screen
+	djnz -_
+	pop bc
+	
 	ld hl,$0700
 	ld (penCol),hl
-	ld hl,tempSwapArea
+	ld hl,appBackUpScreen+400
 	ld d,0
 	ld e,c
-	add hl,de
-	ld e,(hl)
+	add hl,de		; get to offset of the next string
+	ld e,(hl)		; e = offset of next string, d still = 0
 	push hl
+	pop ix
 	ld hl,appBackUpScreen
 	add hl,de
-	pop ix
 	; hl points to the string, ix points to the offset (for checking end of list)
 	; b is count of items in list, c is scroll position
 	; use d for how many items we have shown so far
 	ld d,0
 _:
+	push de
+	push ix
+	inc hl
 	call VPutS
+	pop ix
+	pop de
 	ld a,(penRow)
 	add a,6
 	ld (penRow),a
 	xor a
 	ld (penCol),a
-	
-	
-	
+	inc d
+	ld a,d
+	cp 9
+	jr nc,+_
+	add a,c
+	sub b
+	jr c,-_
+_:
+	; show scroll arrows and process keys
+	ld a,c
+	or a
+	jr z,+_
+	; show up scroll arrow
+	ld hl,$0F01
+	ld (curRow),hl
+	ld a,$1E			; up arrow
+	bcall(_PutC)
+_:
+	ld a,c
+	add a,d
+	cp b
+	jp nc,dslKeyLoop
+	; show down scroll arrow
+	ld hl,$0F07
+	ld (curRow),hl
+	ld a,$1F			; down arrow
+	bcall(_PutC)
+dslKeyLoop:
+	push de
 	bcall(_GetKey)
-	ret
+	pop de
+	cp kClear
+	ret z
+	cp kEnter
+	ret z
 	
+	cp kUp
+	jr nz,+_
+	; up was pressed, check to make sure we CAN scroll up
+	ld a,c
+	or a
+	jr z,dslKeyLoop
+	; we can so do so
+	dec c
+	jr dslLoop
+	
+_:
+	cp kDown
+	jr nz,dslKeyLoop
+	; down was pressed, check to make sure we CAN scroll down
+	ld a,c
+	add a,d
+	cp b
+	jr nc,dslKeyLoop
+	; we can so do so
+	inc c
+	jp dslLoop
+
 	
 
 

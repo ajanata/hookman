@@ -52,7 +52,10 @@ errBadCfg:
 	.db "key...",0
 
 msgHooksInstalled:
-	.db "These hooks were installed:",0
+	.db "Hooks were installed:",0
+
+msgHooksUninstalled:
+	.db "Hooks were uninstalled:",0
 	
 itemUninstall:	.db "Uninstall",0
 itemInstall:	.db "Install",0
