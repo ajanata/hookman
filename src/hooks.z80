@@ -321,7 +321,7 @@ _:
 	inc de			; 6
 	inc de
 	djnz -_
-__:
+_:
 	; now hl points to the entry in the LUT and de points to the code for that hook
 	;bcall(_LdHLInd)
 	call LdHLInd
@@ -351,10 +351,11 @@ __:
 	or (hl)			; set the bit for this hook
 	ld (hl),a		; store it back to the flag byte
 	; ... and I think we're done
-	pop bc
 	pop af			; p/v set if interrupts were enabled before getting here
-	ret po			; po: checks to see if interrupts are OFF. pe for ON
+	jp po,+_		; po: checks to see if interrupts are OFF. pe for ON
 	ei
+_:
+	pop bc
 	ret
 
 
@@ -363,8 +364,9 @@ __:
 ;	turn them back on if they were on when this routine was called.)
 ;	IN: a: Hook number to uninstall.
 ;	OUT: OS hook block is cleared and disabled
-;	DESTROYS: a, de, hl
+;	DESTROYS: de, hl
 uninstallHook:
+	push af
 	push bc
 	ld b,a
 	ld a,i			; save interrupts status (iff2) into p/v flag
@@ -410,10 +412,13 @@ _:					; clear OS hook block
 	and (hl)		; clear the bit for this hook
 	ld (hl),a		; store it back to the flag byte
 	; ... and I think we're done
-	pop bc
-	pop af			; p/v set if interrupts were enabled before getting here
-	ret po			; po: checks to see if interrupts are OFF. pe for ON
+
+	pop af
+	jp po,+_
 	ei
+_:
+	pop bc
+	pop af
 	ret	
 
 

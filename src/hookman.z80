@@ -145,6 +145,7 @@ _:
 	;jr nz,mmNoDebug
 	;di
 	;halt
+	;ei
 
 mmNoDebug:
 	cp kClear
@@ -170,6 +171,7 @@ InstallUninstall:
 	
 	; uninstall hooks
 	call cfgToAppData
+	call InitNameList
 	
 	; I can't really think of a decent way to wrap this up into a loop.
 	; Any suggestions would be much appreciated.
@@ -181,34 +183,42 @@ InstallUninstall:
 	jr z,+_
 	xor a
 	call uninstallHook
+	call GetHookNameAndPutInList
 _:	bit 1,b
 	jr z,+_
 	ld a,1
 	call uninstallHook
+	call GetHookNameAndPutInList
 _:	bit 2,b
 	jr z,+_
 	ld a,2
 	call uninstallHook
+	call GetHookNameAndPutInList
 _:	bit 3,b
 	jr z,+_
 	ld a,3
 	call uninstallHook
+	call GetHookNameAndPutInList
 _:	bit 4,b
 	jr z,+_
 	ld a,4
 	call uninstallHook
+	call GetHookNameAndPutInList
 _:	bit 5,b
 	jr z,+_
 	ld a,5
 	call uninstallHook
+	call GetHookNameAndPutInList
 _:	bit 6,b
 	jr z,+_
 	ld a,6
 	call uninstallHook
+	call GetHookNameAndPutInList
 _:	bit 7,b
 	jr z,+_
 	ld a,7
 	call uninstallHook
+	call GetHookNameAndPutInList
 	
 _:	ld a,(appData+6)
 	ld b,a
@@ -216,34 +226,42 @@ _:	ld a,(appData+6)
 	jr z,+_
 	ld a,8
 	call uninstallHook
+	call GetHookNameAndPutInList
 _:	bit 1,b
 	jr z,+_
 	ld a,9
 	call uninstallHook
+	call GetHookNameAndPutInList
 _:	bit 2,b
 	jr z,+_
 	ld a,10
 	call uninstallHook
+	call GetHookNameAndPutInList
 _:	bit 3,b
 	jr z,+_
 	ld a,11
 	call uninstallHook
+	call GetHookNameAndPutInList
 _:	bit 4,b
 	jr z,+_
 	ld a,12
 	call uninstallHook
+	call GetHookNameAndPutInList
 _:	bit 5,b
 	jr z,+_
 	ld a,13
 	call uninstallHook
+	call GetHookNameAndPutInList
 _:	bit 6,b
 	jr z,+_
 	ld a,14
 	call uninstallHook
+	call GetHookNameAndPutInList
 _:	bit 7,b
 	jr z,+_
 	ld a,15
 	call uninstallHook
+	call GetHookNameAndPutInList
 
 _:	ld a,(appData+7)
 	ld b,a
@@ -251,30 +269,37 @@ _:	ld a,(appData+7)
 	jr z,+_
 	ld a,16
 	call uninstallHook
+	call GetHookNameAndPutInList
 _:	bit 1,b
 	jr z,+_
 	ld a,17
 	call uninstallHook
+	call GetHookNameAndPutInList
 _:	bit 2,b
 	jr z,+_
 	ld a,18
 	call uninstallHook
+	call GetHookNameAndPutInList
 _:	bit 3,b
 	jr z,+_
 	ld a,19
 	call uninstallHook
+	call GetHookNameAndPutInList
 _:	bit 4,b
 	jr z,+_
 	ld a,20
 	call uninstallHook
+	call GetHookNameAndPutInList
 _:	bit 5,b
 	jr z,+_
 	ld a,21
 	call uninstallHook
+	call GetHookNameAndPutInList
 _:	bit 6,b
 	jr z,+_
 	ld a,22
 	call uninstallHook
+	call GetHookNameAndPutInList
 _:	
 	; ugh. what a waste of space.
 	
@@ -290,6 +315,11 @@ _:
 _:
 	call cfgCreate
 	jp c,cfgNoRam		; up at the top of this file -- though we probably will never have this problem
+	
+	bcall(_ClrLCDFull)
+	ld hl,msgHooksUninstalled
+	call DisplayScrollList
+	
 	
 	jp mainMenu
 		
