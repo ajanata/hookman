@@ -13,6 +13,6 @@ The "HMDatbas" appvar contains a list of known hooking apps on the current calcu
 
 *Signature:* "HMDB",dbversion (currently $00)
 
-*Offset table:* Byte indicating count of entries following, followed by that many words of offsets from the end of the offset table to application entires. The "appid" byte in hook nodes (see Active Hook Chain List Format) is a reference into this table.
+*Offset table:* Byte indicating count of entries following, followed by that many words of offsets from the end of the offset table to application entires. The "appid" byte in hook nodes (see Active Hook Chain List Format) is a reference into this table. New entries *always* go at the end of the table.
 
 *Application entries:* Eight bytes for application name, followed by one byte of last known base page, followed by one byte indicating the number of hooks in the application. For each hook, one byte for hook number, one byte for basepage offset (i.e., the hook is on page basepage-pageoffset), one word for hook address ($83 byte).
