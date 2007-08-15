@@ -1,0 +1,289 @@
+;    HookMan - System Hook Manager for TI-83+ Series.
+;    Copyright (C) 2007  Andy Janata
+;
+;    This program is free software; you can redistribute it and/or modify
+;    it under the terms of the GNU General Public License as published by
+;    the Free Software Foundation; either version 2 of the License, or
+;    (at your option) any later version.
+;
+;    This program is distributed in the hope that it will be useful,
+;    but WITHOUT ANY WARRANTY; without even the implied warranty of
+;    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;    GNU General Public License for more details.
+;
+;    You should have received a copy of the GNU General Public License along
+;    with this program; if not, write to the Free Software Foundation, Inc.,
+;    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+;
+;	 You can contact the author via electronic mail at <ajanata@gmail.com>,
+;	 or by writing to Andy Janata, 178 E. 5th St., Brewster, OH 44613 USA.
+
+
+;	Routines for accessing the hook database appvar.
+
+
+
+	
+;	dbToAppData: Copies the hook database appvar's signature and offset table to (appData).
+;	IN: None.
+;	OUT: zero: appvar not found or signature invalid.
+;	DESTROYS: FIXME
+dbHeadToAppData:
+	ld hl,AV_HMDatbas
+	rst 20h
+	bcall(_ChkFindSym)
+	jr nc,+_
+	xor a				; appvar not found, return with zero set
+	ret
+_:
+	xor a
+	cp b
+	jr z,+_			; appvar is in ram, just copy it
+	
+	; archived so flashtoram it
+	ex de, hl			; I *think* not doing first ex de,hl, and putting 20 into hl, may work
+	ld de,20			; skip over data valid flag, data length, symbol entry copy,
+	call BHL_plus_DE_force	; name length, type byte, and name, to point to data
+	ld a,b
+	ld bc,6				; 5 byte signature + 1 count byte
+	ld de,appData
+	bcall(_FlashToRAM)
+	jr ++_
+
+_:
+	ex de,hl
+	inc hl
+	inc hl
+	ld de,appData
+	ld bc,6
+	ldir				; 5 byte signature + 1 count byte
+_:			
+	; (appData) contains the start of the signature
+	ld de,appData
+	ld hl,Sig_HMConfig
+	call CheckSig
+	ret z				; bad sig
+	
+	; now get the rest of the header
+	; (appData+5) is the number of entries in the offset table
+	ld hl,AV_HMDatbas
+	rst 20h
+	bcall(_ChkFindSym)
+	jr nc,+_
+	xor a				; appvar not found, return with zero set
+	ret
+_:
+	xor a
+	cp b
+	jr z,+_			; appvar is in ram, just copy it	
+	
+	; archived so flashtoram it
+	ex de, hl			; I *think* not doing first ex de,hl, and putting 20 into hl, may work
+	ld de,26			; skip over data valid flag, data length, symbol entry copy,
+	call BHL_plus_DE_force	; name length, type byte, name, and what we already copied to point to data
+	ld a,b
+	push af
+	ld a,(appData+5)
+	add a,a				; we need to skip over X words
+	ld c,a
+	ld b,0
+	pop af
+	ld de,appData+6
+	bcall(_FlashToRAM)
+	jr ++_
+
+_:
+	; in RAM so just copy it
+	ex de,hl
+	inc hl
+	inc hl
+	ld de,appData+6
+	ld a,(appData+5)
+	add a,a				; we need to skip over X words
+	ld b,0
+	ld c,a
+	ldir
+_:
+	; now the sig and offset table are in appData
+	xor a
+	inc a			; make sure zero is reset
+	ret
+	
+	
+	
+	
+
+
+;	dbCreate: Creates the hook database appvar HMDatbas.
+;		Checks to make sure enough memory is available for an empty database.
+;	IN: none
+;	OUT: HMDatbas created with no entries.
+;		carry: not enough ram
+;	DESTROYS: all (FIXME?)
+dbCreate:
+	; check to make sure we have enough memory for the appvar
+	ld hl,23			; I think this is right
+	bcall(_EnoughMem)
+	ret c
+	
+	ld hl,AV_HMDatbas
+	rst 20h			; rMOV9TOOP1
+	ld hl,6			; empty database appvar is currently 6 bytes of data
+	bcall(_CreateAppVar)
+	ld hl,Sig_HMDatbas
+	inc de
+	inc de			; get past size bytes
+	ldi
+	ldi
+	ldi				; 5 bytes of signature
+	ldi
+	ldi
+	xor a
+	ld (de),a		; 0 byte for no entries in table
+	ld hl,AV_HMDatbas
+	rst 20h			; rMOV9TOOP1
+	call SafeArc
+	scf
+	ccf
+	ret
+
+
+
+
+;	ScanForHooks: Scans all of the hook memory blocks and adds new hooks to the database.
+;	IN: none
+;	OUT: zero: HMDatbas does not exist or signature does not match
+;		carry: insufficient memory to add to database
+;	DESTROYS: All
+ScanForHooks:
+	call dbHeadToAppData
+	ret z
+	bcall(_FillBasePageTable)		; we need this later when we find hooks
+	
+	; order for each iteration:
+	;	- get to our hook info block
+	;	- check to see if the hook is enabled
+	;	- if it isn't, loop
+	;	- get the base page then the name
+	;	- search for that name in the database
+	;	- create name if needed
+	;	- see if name has that hook already, add if not
+	;	- loop
+	
+	ld a,MAX_HOOK
+
+sfhLoop:
+	push af				; [hook num] [ret]
+	add a,a				; mul by two for offset into LUT
+	ld hl,HookInfoLUT
+	ld d,0
+	ld e,a
+	add hl,de			; hl points into hook info LUT
+	call LdHLInd		; hl points to start of hook info block
+	inc hl				; ... OS hook block
+	push hl				; [hook info ptr] [hook num] [ret]
+	inc hl
+	inc hl				; flags offset for hook installed
+	ld e,(hl)			; d still 0, now de is flags offset
+	inc hl
+	ld b,(hl)			; b is bitmask
+	ld hl,flags
+	add hl,de			; hl points to flag byte
+	ld a,(hl)
+	and b
+	jr nz,+_
+	; hook is inactive
+	pop hl
+	jp sfhLoopBottom
+_:
+	; hook is active
+	pop hl				; hook info ptr [hook num] [ret]
+	call LdHLInd
+	push hl				; [os hook block] [hook num] [ret]
+	; addrl addrh page pagecopy
+	inc hl
+	inc hl
+	ld a,(hl)
+	bcall(_GetAppBasePage)
+	push af				; [basepage] [os hook block] [hook num] [ret]
+	ld hl,$4000
+	ld de,$8040			; app name field
+	bcall(_FindAppHeaderSubField)
+	; technically the name could not be found but that will not happen
+	pop af				; basepage [os hook block] [hook num] [ret]
+	; a:hl points to the name
+	inc hl				; get past field markers
+	inc hl
+	ld de,MD5Temp
+	ld bc,8
+	bcall(_FlashToRAM)
+	; MD5Temp is the name
+	
+	; now look for this name in the database
+	ld hl,AV_HMDatbas
+	rst 20h
+	bcall(_ChkFindSym)
+	ex de,hl
+	ld de,26			;b:hl points to the first offset
+	call BHL_plus_DE_force
+	
+	ld a,(appData+5)	; current number of entries in database
+	ld e,a
+	call BHL_plus_DE_force	; get to first 
+	
+	ld a,b
+	ld (MD5Hash),a
+	ld (MD5Hash+1),hl		; backup b:hl of offset 0 to MD5Hash
+	
+	
+sfhFindAppLoop:
+	or a
+	jr z,sfhFindAppLoopEnd
+	push af					; [database offset] [os hook block] [hook num] [ret]
+	add a,a
+	ld e,a
+	ld d,0
+	ld hl,appData+6
+	add hl,de				; hl points to offset for next entry
+	
+	
+	; fixme, I'm too tired to do more now
+	
+	pop af					; database offset [os hook block] [hook num] [ret]
+	dec a
+	jp sfhFindAppLoop
+sfhFindAppLoopEnd:
+	
+	
+	
+	
+	
+sfhLoopBottom:
+	pop af
+	or a
+	jr z,+_
+	dec a
+	jp sfhLoop
+_:
+	; we're done
+	ret
+	
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
