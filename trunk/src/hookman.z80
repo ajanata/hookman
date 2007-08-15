@@ -34,6 +34,9 @@
 
 
 start:
+
+	call ScanForHooks
+
 	; put initialization stuff here
 	ld hl,AV_HMConfig
 	rst 20h		; rMOV9TOOP1
@@ -605,6 +608,9 @@ exit:
 ; Routines for manipulating the hook list appvar
 #include "chainsappvar.z80"
 
+; Routines for manipulating the application database appvar
+#include "databaseappvar.z80"
+
 ; Constant data (user interface strings, variable names, etc.).
 #include "strings.inc"
 
@@ -614,4 +620,7 @@ exit:
 
 ; various equates needed...
 _OffPageJump		.equ	$44F2
-_FlashToRAM2		.equ	$8054	
+_FlashToRAM2		.equ	$8054
+_FillBasePageTable	.equ	$5011
+_GetAppBasePage		.equ	$50BC
+_FindAppHeaderSubField	.equ	$80AB

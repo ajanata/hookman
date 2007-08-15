@@ -204,10 +204,6 @@ doHook:
 	push af
 	push de
 	push hl
-	;push ix
-	;pop hl
-	;ld (ixbackup),l
-	;ld (ixbackup+1),h
 	; [hl] [de] [af] [bc] [ret addr]
 	ld a,b
 	ld ($FFFF),a			; store the hook number to $FFFF for use later
@@ -229,8 +225,6 @@ _:
 	push ix
 	ld ix,workram+wrHookAddrL
 	push ix
-	;ld ixl,(ixbackup)
-	;ld ixh,(ixbackup+1)
 	bjump(_OffPageJump)
 	; probably eventually I'm going to want to check the flags from the hook
 	; we just ran to see if it wants to ignore this event, and just stop
@@ -242,25 +236,25 @@ _:	; push all the registers again
 	push af
 	push de
 	push hl
-	; I don't think we need to do this between every hook we chain.
-	; That would complicate matters as I would have to find even more RAM to store the bits we need
-	; from the config appvar. If we just do it at the end we can tromp over workram
-	; since we don't need it anymore.
-	;call ChainRestoreHooks
 	jr --_
 
 
 _:	; we're done!
 	; need to restore our hook
 	call ChainRestoreHooks
-	jp exitHook
+	;jp exitHook
+	; save a handful of cycles on every hook
 
-	;pop hl
-	;pop de
-	;pop af
-	;pop bc
-	;ret
-	
+
+;	Clean up the registers and $FFFF to exit the hook cleanly
+exitHook:
+	xor a
+	ld ($FFFF),a
+	pop hl
+	pop de
+	pop af
+	pop bc
+	ret				; this returns back to the OS after the hook
 	
 	
 ;	SomethingBroke: Something along the way broke. Probably can't find the chain list
@@ -275,18 +269,9 @@ SomethingBroke:
 	; FIXME FIXME FIXME FIXME
 
 	; just go through exitHook for now
+	jp exitHook
 
 
-
-;	Clean up the registers and $FFFF to exit the hook cleanly
-exitHook:
-	xor a
-	ld ($FFFF),a
-	pop hl
-	pop de
-	pop af
-	pop bc
-	ret				; this returns back to the OS after the hook
 
 
 	

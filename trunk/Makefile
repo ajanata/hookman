@@ -7,6 +7,7 @@ NULL = /dev/null
 default:
 	spasm src/hookman.z80 -I src
 	wabbit src/hookman.bin bin/HookMan.8xk
+	ls -l src/hookman.bin
 
 listing:
 	spasm src/hookman.z80 -L -I src

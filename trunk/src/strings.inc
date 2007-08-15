@@ -122,7 +122,7 @@ Sig_HMConfig:
 ; application database
 AV_HMDatbas:
 	.db AppVarObj, "HMDatbas"
-Sig_HMDatbase:
+Sig_HMDatbas:
 	.db "HMDB",0			; version again
 	
 	
