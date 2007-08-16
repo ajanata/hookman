@@ -158,6 +158,29 @@ dbCreate:
 ScanForHooks:
 	call dbHeadToAppData
 	ret z
+	ld hl,AV_HMDatbas
+	rst 20h
+	bcall(_ChkFindSym)
+	ld a,b
+	or a
+	jr z,sfhInRam
+	
+	ld hl,+_
+	call APP_PUSH_ERRORH
+	ld hl,AV_HMDatbas
+	rst 20h
+	bcall(_Arc_Unarc)
+	call APP_POP_ERRORH
+	jr sfhInRam
+	
+_:
+	; unarc failed for some reason, probably insufficient memory
+	scf
+	ret
+	
+	; HMDatBas should be in RAM now
+sfhInRam:
+	
 	bcall(_FillBasePageTable)		; we need this later when we find hooks
 	
 	; order for each iteration:
@@ -169,6 +192,18 @@ ScanForHooks:
 	;	- create name if needed
 	;	- see if name has that hook already, add if not
 	;	- loop
+	
+	ld hl,AV_HMDatbas
+	rst 20h
+	bcall(_ChkFindSym)
+	ex de,hl
+	ld de,8				; 2 size + 5 sig + 1 number of entries
+	add hl,de
+	ld a,(appData+5)
+	add a,a
+	ld e,a				; d still 0
+	add hl,de			; hl points to the entry after the offset table
+	ld (MD5Hash),hl
 	
 	ld a,MAX_HOOK
 
@@ -220,44 +255,62 @@ _:
 	; MD5Temp is the name
 	
 	; now look for this name in the database
-	ld hl,AV_HMDatbas
-	rst 20h
-	bcall(_ChkFindSym)
-	ex de,hl
-	ld de,26			;b:hl points to the first offset
-	call BHL_plus_DE_force
-	
-	ld a,(appData+5)	; current number of entries in database
-	ld e,a
-	call BHL_plus_DE_force	; get to first 
-	
-	ld a,b
-	ld (MD5Hash),a
-	ld (MD5Hash+1),hl		; backup b:hl of offset 0 to MD5Hash
-	
+	res 0,(iy+asm_Flag1)	; flag: we found the app in the list
+	res 1,(iy+asm_Flag2)	; flag: we found the hook in the app's list
+	ld a,(appData+5)		; number of apps in the database so far
 	
 sfhFindAppLoop:
 	or a
 	jr z,sfhFindAppLoopEnd
+	dec a					; first offset is actually right at the address we already have, and so on
 	push af					; [database offset] [os hook block] [hook num] [ret]
 	add a,a
 	ld e,a
 	ld d,0
 	ld hl,appData+6
 	add hl,de				; hl points to offset for next entry
-	
-	
-	; fixme, I'm too tired to do more now
-	
+	call LdHLInd
+	ex de,hl
+	ld hl,(MD5Hash)
+	add hl,de
+	ld de,MD5Temp
+	ld bc,8
+	call StrCmp
+	jr z,sfh_fal_GotApp
+	; not the app we're looking for
 	pop af					; database offset [os hook block] [hook num] [ret]
+	;dec a					; we already did this earlier to adjust for the array base
+	jr sfhFindAppLoop
+
+
+sfh_fal_GotApp:
+	; we found the app in there
+	; hl points to the last known basepage
+	; ignore that for now
+	inc hl
+	; now the number of hooks for the app in the database
+	ld a,(hl)
+	
+	; time for yet another nested for loop
+sfh_fal_FindHookLoop:
+	or a
+	jr z,sfh_fal_fhl_End
+	
+
+
 	dec a
-	jp sfhFindAppLoop
+	jr sfh_fal_FindHookLoop
+
+sfh_fal_fhl_End:
+
+
+
 sfhFindAppLoopEnd:
 	
 	
 	
 	
-	
+	; if the hook was inactive we jump here from above otherwise we fall through
 sfhLoopBottom:
 	pop af
 	or a

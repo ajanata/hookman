@@ -624,3 +624,5 @@ _FlashToRAM2		.equ	$8054
 _FillBasePageTable	.equ	$5011
 _GetAppBasePage		.equ	$50BC
 _FindAppHeaderSubField	.equ	$80AB
+MD5Temp				.equ	$8259
+MD5Hash				.equ	$8292
