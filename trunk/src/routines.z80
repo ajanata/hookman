@@ -534,5 +534,41 @@ StrCmp:
 	jr StrCmp
 
 
+;	MyInsertMem: Checks for enough memory then inserts memory into appvar and updates size bytes.
+;	IN: hl: Number of bytes to input
+;		de: where to insert
+;		OP1: variable type/name
+;	OUT: carry: Insufficient memory
+;	DESTROYS: all
+MyInsertMem:
+	push de			; [where] [ret]
+	bcall(_EnoughMem)
+	pop hl			; where [ret]
+	ret c
+	ex de,hl		; de: where, hl: bytes
+	push hl			; [bytes] [ret]
+	bcall(_InsertMem)
+	bcall(_ChkFindSym)
+	pop hl			; bytes [ret]
+	ex de,hl		; de: bytes; hl: size word
+	push hl			; [size word] [ret]
+	call LdHLInd
+	add hl,de		; add bytes to size of variable
+	ex de,hl
+	pop hl			; size word [ret]
+	ld (hl),e		; save new size
+	inc hl
+	ld (hl),d
+	ret
+	
+	
+	
+	
+
+
+
+
+
+
 
 
