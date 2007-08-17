@@ -35,6 +35,13 @@
 
 start:
 
+	ld hl,AV_HMDatBas
+	rst 20h
+	bcall(_ChkFindSym)
+	jr nc,+_
+	call dbCreate
+_:
+
 	call ScanForHooks
 
 	; put initialization stuff here
@@ -626,3 +633,4 @@ _GetAppBasePage		.equ	$50BC
 _FindAppHeaderSubField	.equ	$80AB
 MD5Temp				.equ	$8259
 MD5Hash				.equ	$8292
+MD5Length			.equ	$8269
