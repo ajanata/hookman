@@ -207,7 +207,8 @@ sfhInRam:
 	add hl,de
 	ld a,(appBackUpScreen+5)
 	add a,a
-	ld e,a				; d still 0
+	ld e,a
+	ld d,0
 	add hl,de			; hl points to the entry after the offset table
 	ld (MD5Hash),hl
 	
@@ -292,7 +293,7 @@ sfhFindAppLoop:
 	add hl,de				; hl points to offset for next entry
 	call LdHLInd
 	ex de,hl
-	ld hl,(MD5Hash)
+	ld hl,(MD5Hash)			; first entry pointer
 	add hl,de
 	ld de,MD5Temp
 	ld bc,8
@@ -312,8 +313,6 @@ sfh_fal_GotApp:
 	; we still have the loop counter from the last loop on the stack!
 	; now the number of hooks for the app in the database
 	ld a,(hl)
-	; and store a pointer to this at MD5Length+1
-	ld (MD5Length+1),hl
 	inc hl			; point to the first hook node
 	
 	; hook node: [hook num 1] [basepage offset 1] [address 2]
@@ -325,7 +324,7 @@ sfh_fal_FindHookLoop:
 	push af				; [app offset] [database offset] [os hook block] [hook num] [ret]
 	
 	ex de,hl
-	ld hl,8				; the MSB of the hook num word (ie the hook num itself)
+	ld hl,7				; the MSB of the hook num word (ie the hook num itself)
 	add hl,sp			; possible speed optimization here by doing this once earlier
 	ld a,(de)
 	cp (hl)				; see if this is the hook
@@ -369,7 +368,6 @@ sfh_fal_fhl_End:
 	pop hl
 	ex de,hl
 	ld hl,4
-	push de				; [new] [database offset] [os hook block] [hook num] [ret]
 	call MyInsertMem
 	jr nc,+_
 	; not enough ram
@@ -384,8 +382,49 @@ sfh_fal_fhl_End:
 	ret
 	
 _:
-	pop de				; new [database offset] [os hook block] [hook num] [ret]
-	ld hl,6				; hook number
+	; we need to look up the appvar again
+	; still have the appvar name in OP1
+  ;di
+  ;halt
+	bcall(_ChkFindSym)
+	ld hl,7				; 2 size + 5 sig
+	add hl,de
+	ld b,(hl)			; we need this later
+	inc hl
+	ex de,hl
+	ld hl,1				; database offset
+	add hl,sp
+	ld a,(hl)
+	add a,a				; don't dec a, not needed
+	; now a is the database offset of the app we're adding to
+	; need to move to the end of the offset table first though
+	ld c,a
+	ld a,b
+	add a,a
+	ex de,hl
+	ld d,0
+	ld e,a
+	add hl,de			; pointing to first app
+	
+	ld e,c
+	add hl,de			; pointing to the app
+	ld e,9				; name and basepage
+	add hl,de
+	ld a,(hl)			; number of hooks
+	inc (hl)			; update
+	inc hl				; step past
+	add a,a				; don't need to dec a since we use the old count to start with
+	add a,a				; mul by 4 bytes/entry
+	ld e,a
+	add hl,de
+	ex de,hl
+	
+	
+	
+	
+	
+	;de = new [database offset] [os hook block] [hook num] [ret]
+	ld hl,5				; hook number
 	add hl,sp
 	ldi					; put hook num into appvar
 	inc de				; ignore page offset for now, go to address
@@ -402,10 +441,6 @@ _:
 	ld a,(MD5Length)
 	sub (hl)			; get the page offset
 	ld (de),a
-	
-	; now update the hook count
-	ld hl,(MD5Length+1)
-	inc (hl)
 
 
 	; clean up the stack so only the return address is left
@@ -431,8 +466,8 @@ sfhFindAppLoopEnd:
 	; don't forget to take into account stuff moving!
 	
 	
-  di
-  halt
+  ;di
+  ;halt
 	
 	; zeroth: make sure there's enough memory!
 	ld hl,16
@@ -462,8 +497,8 @@ _:
 	ld d,0
 	ld e,a
 	add hl,de			; where to put the new offset
-	ex de,hl
-	push de				; [new offset] [os hook block] [hook num] [ret]
+	;ex de,hl
+	push hl				; [new offset] [os hook block] [hook num] [ret]
 	ld hl,AV_HMDatbas
 	rst 20h
 	pop de				; new offset [os hook block] [hook num] [ret]
@@ -538,9 +573,9 @@ _:
 	ld (hl),d
 	inc hl
 	add hl,de			; now we're at where we need to put the new app block
-	ex de,hl			; de: where to put it
-	push de				; [where to insert mem] [os hook block] [hook num] [ret]
-	ld hl,AV_HMDatBas
+	;ex de,hl			; de: where to put it
+	push hl				; [where to insert mem] [os hook block] [hook num] [ret]
+	ld hl,AV_HMDatbas
 	rst 20h				; I might not need to do that here
 	pop de				; where to insert mem [os hook block] [hook num] [ret]
 	ld hl,14
@@ -564,7 +599,15 @@ _:
 	add a,a
 	ld d,0
 	ld e,a
-	add hl,de
+	add hl,de			; now we are pointing to the offset
+	push hl
+	pop de				; need the address in both
+	inc de				; point after the table
+	inc de
+	call LdHLInd
+	add hl,de			; now we are pointing to this app's block
+	
+	
 	ex de,hl
 	
 	
