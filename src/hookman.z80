@@ -634,3 +634,4 @@ _FindAppHeaderSubField	.equ	$80AB
 MD5Temp				.equ	$8259
 MD5Hash				.equ	$8292
 MD5Length			.equ	$8269
+MD5Buffer			.equ	$83A5
