@@ -397,17 +397,29 @@ _:
 	ld a,(hl)
 	add a,a				; don't dec a, not needed
 	; now a is the database offset of the app we're adding to
-	; need to move to the end of the offset table first though
-	ld c,a
+	ex de,hl
+	ld d,0
+	ld e,a
+	push hl
+	pop ix				; getting annoyed
+	add hl,de
+	push hl
+	pop de
+	call LdHLInd
+	push hl				; [app offset in data area] [database offset] [os hook block] [hook num] [ret]
+	
+	; need to move to the end of the offset table
+	push ix
+	pop hl				; grr
 	ld a,b
 	add a,a
-	ex de,hl
 	ld d,0
 	ld e,a
 	add hl,de			; pointing to first app
 	
-	ld e,c
+	pop de				; app offset in data area [database offset] [os hook block] [hook num] [ret]
 	add hl,de			; pointing to the app
+	
 	ld e,9				; name and basepage
 	add hl,de
 	ld a,(hl)			; number of hooks
@@ -418,9 +430,6 @@ _:
 	ld e,a
 	add hl,de
 	ex de,hl
-	
-	
-	
 	
 	
 	;de = new [database offset] [os hook block] [hook num] [ret]
@@ -535,7 +544,6 @@ _:
 	ld e,a
 	add hl,de			; now we point to the new, empty offset
 	
-	
 	pop af				; number of offsets [os hook block] [hook num] [ret]
 	or a
 	jr z,+_				; if there wasn't anything already there we need to skip this next bit
@@ -543,13 +551,18 @@ _:
 	; there is already something there so we need to figure out where to put this one
 	dec hl
 	dec hl
+	push hl
+	pop de
 	call LdHLInd		; get the offset of the last app
-	inc hl
-	inc hl
+	inc de
+	inc de
+	push de				; [new offset] [os hook block] [hook num] [ret]
+	inc de
+	inc de
 	add hl,de			; hl points to the last app node now
 	
 	; [app name 8] [app page 1] [num hooks 1] [hook nodes 4*num]
-	push de				; [new offset] [os hook block] [hook num] [ret]
+
 	ld de,9
 	add hl,de			; hl is number of hooks for this app
 	ld a,(hl)
