@@ -24,11 +24,11 @@
 
 
 	
-;	dbToappBackUpScreen: Copies the hook database appvar's signature and offset table to (appBackUpScreen).
+;	dbHeadToappData: Copies the hook database appvar's signature and offset table to (appData).
 ;	IN: None.
 ;	OUT: zero: appvar not found or signature invalid.
 ;	DESTROYS: FIXME
-dbHeadToappBackUpScreen:
+dbHeadToappData:
 	ld hl,AV_HMDatbas
 	rst 20h
 	bcall(_ChkFindSym)
@@ -46,7 +46,7 @@ _:
 	call BHL_plus_DE_force	; name length, type byte, and name, to point to data
 	ld a,b
 	ld bc,6				; 5 byte signature + 1 count byte
-	ld de,appBackUpScreen
+	ld de,appData
 	bcall(_FlashToRAM)
 	jr ++_
 
@@ -54,18 +54,18 @@ _:
 	ex de,hl
 	inc hl
 	inc hl
-	ld de,appBackUpScreen
+	ld de,appData
 	ld bc,6
 	ldir				; 5 byte signature + 1 count byte
 _:			
-	; (appBackUpScreen) contains the start of the signature
-	ld de,appBackUpScreen
+	; (appData) contains the start of the signature
+	ld de,appData
 	ld hl,Sig_HMDatbas
 	call CheckSig
 	ret z				; bad sig
 	
 	; now get the rest of the header
-	; (appBackUpScreen+5) is the number of entries in the offset table
+	; (appData+5) is the number of entries in the offset table
 	ld hl,AV_HMDatbas
 	rst 20h
 	bcall(_ChkFindSym)
@@ -83,13 +83,13 @@ _:
 	call BHL_plus_DE_force	; name length, type byte, name, and what we already copied to point to data
 	ld a,b
 	push af
-	ld a,(appBackUpScreen+5)
+	ld a,(appData+5)
 	add a,a				; we need to skip over X words
 	jr z,++_			; skip all of this if there is nothing to load, _FlashToRam doesn't like bc=0
 	ld c,a
 	ld b,0
 	pop af
-	ld de,appBackUpScreen+6
+	ld de,appData+6
 	bcall(_FlashToRAM)
 	jr ++_
 
@@ -97,14 +97,14 @@ _:
 	; in RAM so just copy it
 	ld hl,8				; skip size and sig and count
 	add hl,de
-	ld de,appBackUpScreen+6
-	ld a,(appBackUpScreen+5)
+	ld de,appData+6
+	ld a,(appData+5)
 	add a,a				; we need to skip over X words
 	ld b,0
 	ld c,a
 	ldir
 _:
-	; now the sig and offset table are in appBackUpScreen
+	; now the sig and offset table are in appData
 	xor a
 	inc a			; make sure zero is reset
 	ret
@@ -154,16 +154,23 @@ dbCreate:
 ;		Holy hell is this confusing. If this works right the first time...
 ;		As a safety precaution, any time a hook is added, this routine is re-started from the
 ;		beginning (as that changes the size of the appvar and I don't want anything to get confused).
+;		FIXME: Crashes when HMDatbas is in RAM.
 ;	IN: none
 ;	OUT: zero: HMDatbas does not exist or signature does not match
 ;		carry: insufficient memory to add to database
 ;	DESTROYS: All
 ScanForHooks:
+	bcall(_ClrLCDFull)
+	ld hl,0
+	ld (curRow),hl
+	ld hl,msgScanning
+	call PutS
 
-  ;di
-  ;halt
 
-	call dbHeadToappBackUpScreen
+;	go here when restarting the routine
+ScanForHooks_restart:
+
+	call dbHeadToappData
 	ret z
 	ld hl,AV_HMDatbas
 	rst 20h
@@ -205,7 +212,7 @@ sfhInRam:
 	bcall(_ChkFindSym)
 	ld hl,8				; 2 size + 5 sig + 1 number of entries
 	add hl,de
-	ld a,(appBackUpScreen+5)
+	ld a,(appData+5)
 	add a,a
 	ld e,a
 	ld d,0
@@ -215,6 +222,7 @@ sfhInRam:
 	ld a,MAX_HOOK
 
 sfhLoop:
+	call PrintDot
 	push af				; [hook num] [ret]
 	add a,a				; mul by two for offset into LUT
 	ld hl,HookInfoLUT
@@ -238,6 +246,7 @@ sfhLoop:
 	pop hl				; hook info ptr [hook num] [ret]
 	jp sfhLoopBottom
 _:
+	
 	; hook is active
 	pop hl				; hook info ptr [hook num] [ret]
 	call LdHLInd
@@ -263,6 +272,7 @@ _:
 	jp sfhLoopBottom
 	
 _:
+	
 	pop af
 	push af
 	ld hl,$4000
@@ -279,9 +289,10 @@ _:
 	; MD5Temp is the name
 	
 	; now look for this name in the database
-	ld a,(appBackUpScreen+5)		; number of apps in the database so far
+	ld a,(appData+5)		; number of apps in the database so far
 	
 sfhFindAppLoop:
+	
 	or a
 	jp z,sfhFindAppLoopEnd
 	dec a					; first offset is actually right at the address we already have, and so on
@@ -289,7 +300,7 @@ sfhFindAppLoop:
 	add a,a
 	ld e,a
 	ld d,0
-	ld hl,appBackUpScreen+6
+	ld hl,appData+6
 	add hl,de				; hl points to offset for next entry
 	call LdHLInd
 	ex de,hl
@@ -306,6 +317,7 @@ sfhFindAppLoop:
 
 
 sfh_fal_GotApp:
+	
 	; we found the app in there
 	; hl points to the last known basepage
 	; we don't really need that right now
@@ -319,6 +331,7 @@ sfh_fal_GotApp:
 	
 	; time for yet another nested for loop
 sfh_fal_FindHookLoop:
+	
 	or a
 	jr z,sfh_fal_fhl_End
 	push af				; [app offset] [database offset] [os hook block] [hook num] [ret]
@@ -352,6 +365,7 @@ sfh_fal_WeAlreadyHaveTheHook:
 
 
 sfh_fal_fhl_End:
+	
 	; if we get to this point we looped through all of the hooks we know about for the app
 	; and didn't find it so we have to add it
 	
@@ -384,8 +398,7 @@ sfh_fal_fhl_End:
 _:
 	; we need to look up the appvar again
 	; still have the appvar name in OP1
-  ;di
-  ;halt
+	
 	bcall(_ChkFindSym)
 	ld hl,7				; 2 size + 5 sig
 	add hl,de
@@ -457,9 +470,10 @@ _:
 	pop bc
 	pop bc
 	; now restart this routine
-	jp ScanForHooks
+	jp ScanForHooks_restart
 
 sfhFindAppLoopEnd:
+	
 	; if we get here we did not find the app in the database at all so we have to add both
 	; the app and the hook
 	; this will be nastier
@@ -527,6 +541,7 @@ _:
 _:
 	;pop de				; new offset [os hook block] [hook num] [ret]
 	;push de
+	
 	
 	; we have to look up the appvar again
 	ld hl,AV_HMDatbas
@@ -600,6 +615,7 @@ _:
 	
 	
 _:
+	
 	; we have to look the appvar up again
 	ld hl,AV_HMDatbas
 	rst 20h
@@ -657,7 +673,7 @@ _:
 	; and when we're done we clean up the stack and restart this routine
 	; oh hey the stack is already cleaned up
 	
-	jp ScanForHooks
+	jp ScanForHooks_restart
 	
 	; if the hook was inactive we jump here from above otherwise we fall through
 sfhLoopBottom:

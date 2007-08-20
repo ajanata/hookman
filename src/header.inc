@@ -18,6 +18,9 @@
 ;	 You can contact the author via electronic mail at <ajanata@gmail.com>,
 ;	 or by writing to Andy Janata, 178 E. 5th St., Brewster, OH 44613 USA.
 
+;	Required application header. Must be 128 bytes long.
+
+
 ;Field: Program length
 	.DB 080h,0Fh
 ;Length=0 (N/A for unsigned apps)

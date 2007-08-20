@@ -1,0 +1,121 @@
+;    HookMan - System Hook Manager for TI-83+ Series.
+;    Copyright (C) 2007  Andy Janata
+;
+;    This program is free software; you can redistribute it and/or modify
+;    it under the terms of the GNU General Public License as published by
+;    the Free Software Foundation; either version 2 of the License, or
+;    (at your option) any later version.
+;
+;    This program is distributed in the hope that it will be useful,
+;    but WITHOUT ANY WARRANTY; without even the implied warranty of
+;    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;    GNU General Public License for more details.
+;
+;    You should have received a copy of the GNU General Public License along
+;    with this program; if not, write to the Free Software Foundation, Inc.,
+;    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+;
+;	 You can contact the author via electronic mail at <ajanata@gmail.com>,
+;	 or by writing to Andy Janata, 178 E. 5th St., Brewster, OH 44613 USA.
+
+;	Advanced menu and hook chain editor.
+
+
+
+
+Advanced:
+	ld hl,advancedMenu
+	call menu
+	dec a
+	jr z,ChainEditor
+	dec a
+	jr z,DatabaseEditor
+	dec a
+	jp nz,mainMenu
+	
+	
+UpdateAppPages:
+DatabaseEditor:
+	; meh, will do these later. not critical
+	jp menuStub
+
+
+
+ChainOffsetTable	.equ	MD5Temp
+ChainFirstChain		.equ	ChainOffsetTable+2		; should always be ChainOffsetTable + MAX_HOOK+1
+DbOffsetTable		.equ	ChainFirstChain+2		; points to length prefix
+DbFirstEntry		.equ	DbOffsetTable+2			; should always be DbOffsetTable + count*2 +1
+
+
+;	ChainEditor: The main chain editor interface.
+;		Needs to jp back to mainMenu when done!
+ChainEditor:
+	; check to see if HMChains exists, and if not, create it
+	ld hl,AV_HMChains
+	rst 20h
+	bcall(_ChkFindSym)
+	jr nc,+_
+	call cavCreate
+	jr ChainEditor			; we need to get it back into ram...
+_:
+	ld a,b
+	or a
+	jr z,+_
+	ld hl,ceNoRam
+	call APP_PUSH_ERRORH
+	bcall(_Arc_Unarc)
+	call APP_POP_ERRORH
+_:
+	; now HMChains is in RAM
+	; and since I'm tired of streaming stuff from archive, I'm
+	; going to unarchive HMDatbas as well for the time being.
+	ld hl,AV_HMDatbas
+	rst 20h
+	bcall(_ChkFindSym)
+	; it WILL exist if we get to this routine
+	ld a,b
+	or a
+	jr z,_+
+	ld hl,ceNoRam
+	call APP_PUSH_ERRORH
+	bcall(_Arc_Unarc)
+	call APP_POP_ERRORH
+_:
+	; now HMDatbas is in RAM too
+	bcall(_ClrLCDFull)
+	ld hl,0
+	ld (penCol),hl
+	ld hl,msgChooseChain
+	call VPutS
+
+
+
+
+
+
+
+
+
+
+
+
+ceNoRam:
+	; not enough RAM to unarchive something.
+	call cls
+	ld hl,errLowMem
+	call PutS
+	bcall(_GetKey)
+	jp mainMenu
+
+
+;	menu data block	
+advancedMenu:
+	;    0123456789ABCDEF
+	.db "    Advanced    ",0
+	.db 3
+	.db "Edit Chains",0
+	.db "Edit Database",0
+	.db "Update App Pages",0
+
+
+

@@ -562,10 +562,33 @@ MyInsertMem:
 	ret
 	
 	
-	
-	
+;	PrintDot: Prints a single period at the current cursor position.
+;	IN: none
+;	OUT: none
+;	DESTROYS: none
+PrintDot:
+	push af
+	push bc
+	push de
+	push hl
+	ld a,'.'
+	bcall(_PutC)
+	pop hl
+	pop de
+	pop bc
+	pop af
+	ret	
 
-
+;	cls: You remember what cls does from the DOS and QBASIC days, right?
+;		Seriously. No explanation required.
+;	IN: none
+;	OUT: Screen cleared and PutC cursor at top left.
+;	DESTROYS: all
+cls:
+	bcall(_ClrLCDFull)
+	ld hl,0
+	ld (curRow),hl
+	ret
 
 
 
