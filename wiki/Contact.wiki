@@ -1,5 +1,5 @@
 #summary How to contact the program's author.
-#labels contact,Featured
+#labels Phase-Support,Featured
 
 I pay attention to several means of communication. 
 
