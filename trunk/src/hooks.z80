@@ -199,6 +199,7 @@ hookUSBActivity:
 ;	IN: b: Hook identification number (see defines in hooklist.inc).
 ;	   top of stack: Old bc to pass to the real hook.
 ;	FIXME: save ix
+;	FIXME: Probably shoud stick the OPs somewhere too.
 doHook:	
 	; STACK: [bc] [ret addr]
 	push af

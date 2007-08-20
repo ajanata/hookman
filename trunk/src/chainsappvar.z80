@@ -62,47 +62,48 @@ _:
 	; (appData) contains the start of the signature
 	ld de,appData
 	ld hl,Sig_HMChains
+	jp CheckSig			; this can probably be done with StrCmp.... at any rate it'll return back
 	
-	; 1
-	ld a,(de)
-	cp (hl)
-	jr nz,+_
+	
+	
+	
+;	cavCreate: Creates the hook chain list appvar HMChains.
+;		Checks to make sure enough memory is available.
+;	IN: none
+;	OUT: HMChains created and defaulted to no hooks for any chain
+;		carry: not enough ram
+;	DESTROYS: all
+cavCreate:
+	; check to make sure we have enough memory for the appvar
+	ld hl,17+5+MAX_HOOK+1+1			; 17 system + 5 sig + MAX_HOOK+1 hooks + 1 terminator
+	bcall(_EnoughMem)
+	ret c
+	
+	ld hl,AV_HMChains
+	rst 20h			; rMOV9TOOP1
+	ld hl,5+MAX_HOOK+1+1
+	bcall(_CreateAppVar)
+	ld hl,Sig_HMChains
 	inc de
-	inc hl
-	
-	; 2
-	ld a,(de)
-	cp (hl)
-	jr nz,+_
-	inc de
-	inc hl
-	
-	; 3
-	ld a,(de)
-	cp (hl)
-	jr nz,+_
-	inc de
-	inc hl
-	
-	; 4
-	ld a,(de)
-	cp (hl)
-	jr nz,+_
-	inc de
-	inc hl
-	
-	; 5
-	ld a,(de)
-	cp (hl)
-	jr z,++_
-
-_:
-	; bad signature
+	inc de			; get past size bytes
+	ldi
+	ldi
+	ldi				; 5 bytes of signature
+	ldi
+	ldi
 	xor a
+	ld b,MAX_HOOK+1
+_:
+	ld (de),a
+	inc de
+	djnz -_
+	ld a,$FE
+	ld (de),a
+	
+	ld hl,AV_HMChains
+	rst 20h			; rMOV9TOOP1
+	call SafeArc
+	scf
+	ccf
 	ret
 	
-_:
-	; good signature
-	xor a
-	inc a
-	ret		

@@ -91,7 +91,7 @@ _:
 ;	IN: none
 ;	OUT: HMConfig created and defaulted to no hooks active
 ;		carry: not enough ram
-;	DESTROYS: all (FIXME?)
+;	DESTROYS: all
 cfgCreate:
 	; check to make sure we have enough memory for the appvar
 	ld hl,25			; I think this is right

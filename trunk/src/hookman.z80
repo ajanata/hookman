@@ -31,18 +31,11 @@
 #include "header.inc"
 ; The standard include file, modified slightly for use with this assembler.
 #include "ti83plus.inc"
+; More equates not found in ti83plus.inc.
+#include "equates.inc"
 
 
 start:
-
-	ld hl,AV_HMDatBas
-	rst 20h
-	bcall(_ChkFindSym)
-	jr nc,+_
-	call dbCreate
-_:
-
-	call ScanForHooks
 
 	; put initialization stuff here
 	ld hl,AV_HMConfig
@@ -56,11 +49,11 @@ _:
 	
 	; now make the appvar
 	call cfgCreate
-	jr nc,mainMenu		; no need to verify the variable we just created
+	jr nc,start3		; no need to verify the variable we just created
 	
 	; not enough memory for the appvar
-cfgNoRam:
-	bcall(_ClrLCDFull)
+varLowRam:
+	call cls
 	ld hl,errLowMem
 	call PutS
 	bcall(_GetKey)
@@ -69,21 +62,54 @@ cfgNoRam:
 	; config appvar exists, make sure it's valid
 start2:
 	call cfgToAppData
-	jr nz,mainMenu
+	jr nz,start3
 	; config appvar isn't valid
-	bcall(_ClrLCDFull)
-	ld hl,errBadCfg
+	call cls
+	ld hl,errBadVar
+	call PutS
+	ld hl,$0001
+	ld (curRow),hl
+	ld hl,str_HMConfig
 	call PutS
 	bcall(_GetKey)
 	jp exit
+
+
+start3:
+	; config appvar is ok, check database
+
+	ld hl,AV_HMDatBas
+	rst 20h
+	bcall(_ChkFindSym)
+	jr nc,+_
+	call dbCreate
+	jr nc,+_
 	
+	; not enough ram
+	jr varLowRam
+	
+_:
+	; check to make sure it's valid
+	call dbHeadToappData
+	jr nz,start4
+	; database appvar isn't valid
+	call cls
+	ld hl,errBadVar
+	call PutS
+	ld hl,$0001
+	ld (curRow),hl
+	ld hl,str_HMDatbas
+	call PutS
+	bcall(_GetKey)
+	jp exit
+
+start4:
+	call ScanForHooks		; this crashes for some reason when HMDatbas is in RAM
 	
 	
 mainMenu:
-	bcall(_ClrLCDFull)
+	call cls
 	set textInverse,(iy+textFlags)
-	ld hl,$0000
-	ld (curRow),hl
 	ld hl,titleHookman
 	call PutS
 	res textInverse,(iy+textFlags)
@@ -145,443 +171,30 @@ _:
 	call VPutSC
 
 
-	; key input loop
-	; kclear, kquit, k0-k4
 _:
 	bcall(_GetKey)
-	
-	; XXX DEBUG
-	;cp kEnter
-	;jr nz,mmNoDebug
-	;di
-	;halt
-	;ei
-
-mmNoDebug:
 	cp kClear
-	jp z,exit
+	jr z,exit
 	cp kQuit
-	jp z,exit
+	jr z,exit
 	sub k1
-	jr z,InstallUninstall
-	dec a
-	jp z,advancedMenu
-	dec a
+	jp z,InstallUninstall
+	dec a					; 2
+	jp z,Advanced
+	dec a					; 3
 	jp z,helpMenu
-	dec a
+	dec a					; 4
 	jp z,About
-	dec a
-	jp z,exit
+	dec a					; 5
+	jr z,exit
 	jr -_
 
 
-InstallUninstall:
-	call AnyHooksInstalled
-	jp z,InstallHooks
-	
-	; uninstall hooks
-	call cfgToAppData
-	call InitNameList
-	
-	; I can't really think of a decent way to wrap this up into a loop.
-	; Any suggestions would be much appreciated.
-	
-	ld a,(appData+5)
-	ld b,a
-	
-	bit 0,b
-	jr z,+_
-	xor a
-	call uninstallHook
-	call GetHookNameAndPutInList
-_:	bit 1,b
-	jr z,+_
-	ld a,1
-	call uninstallHook
-	call GetHookNameAndPutInList
-_:	bit 2,b
-	jr z,+_
-	ld a,2
-	call uninstallHook
-	call GetHookNameAndPutInList
-_:	bit 3,b
-	jr z,+_
-	ld a,3
-	call uninstallHook
-	call GetHookNameAndPutInList
-_:	bit 4,b
-	jr z,+_
-	ld a,4
-	call uninstallHook
-	call GetHookNameAndPutInList
-_:	bit 5,b
-	jr z,+_
-	ld a,5
-	call uninstallHook
-	call GetHookNameAndPutInList
-_:	bit 6,b
-	jr z,+_
-	ld a,6
-	call uninstallHook
-	call GetHookNameAndPutInList
-_:	bit 7,b
-	jr z,+_
-	ld a,7
-	call uninstallHook
-	call GetHookNameAndPutInList
-	
-_:	ld a,(appData+6)
-	ld b,a
-	bit 0,b
-	jr z,+_
-	ld a,8
-	call uninstallHook
-	call GetHookNameAndPutInList
-_:	bit 1,b
-	jr z,+_
-	ld a,9
-	call uninstallHook
-	call GetHookNameAndPutInList
-_:	bit 2,b
-	jr z,+_
-	ld a,10
-	call uninstallHook
-	call GetHookNameAndPutInList
-_:	bit 3,b
-	jr z,+_
-	ld a,11
-	call uninstallHook
-	call GetHookNameAndPutInList
-_:	bit 4,b
-	jr z,+_
-	ld a,12
-	call uninstallHook
-	call GetHookNameAndPutInList
-_:	bit 5,b
-	jr z,+_
-	ld a,13
-	call uninstallHook
-	call GetHookNameAndPutInList
-_:	bit 6,b
-	jr z,+_
-	ld a,14
-	call uninstallHook
-	call GetHookNameAndPutInList
-_:	bit 7,b
-	jr z,+_
-	ld a,15
-	call uninstallHook
-	call GetHookNameAndPutInList
 
-_:	ld a,(appData+7)
-	ld b,a
-	bit 0,b
-	jr z,+_
-	ld a,16
-	call uninstallHook
-	call GetHookNameAndPutInList
-_:	bit 1,b
-	jr z,+_
-	ld a,17
-	call uninstallHook
-	call GetHookNameAndPutInList
-_:	bit 2,b
-	jr z,+_
-	ld a,18
-	call uninstallHook
-	call GetHookNameAndPutInList
-_:	bit 3,b
-	jr z,+_
-	ld a,19
-	call uninstallHook
-	call GetHookNameAndPutInList
-_:	bit 4,b
-	jr z,+_
-	ld a,20
-	call uninstallHook
-	call GetHookNameAndPutInList
-_:	bit 5,b
-	jr z,+_
-	ld a,21
-	call uninstallHook
-	call GetHookNameAndPutInList
-_:	bit 6,b
-	jr z,+_
-	ld a,22
-	call uninstallHook
-	call GetHookNameAndPutInList
-_:	
-	; ugh. what a waste of space.
-	
-	
-	; now clear the bits in our appvar
-	; at this point, with nothing else in the appvar, it's easier to delete it and make it again
-	ld hl,AV_HMConfig
-	rst 20h
-	bcall(_ChkFindSym)
-	; it SHOULD always exist at this point
-	jr c,+_			; but just in case it doesn't somehow, which should never happen
-	bcall(_DelVarArc)
-_:
-	call cfgCreate
-	jp c,cfgNoRam		; up at the top of this file -- though we probably will never have this problem
-	
-	bcall(_ClrLCDFull)
-	ld hl,msgHooksUninstalled
-	call DisplayScrollList
-	
-	
-	jp mainMenu
-		
-
-
-
-InstallHooks:
-	; check to make sure the config appvar is valid first
-	call cfgToAppData
-	jp z,ihConfigInvalid
-	
-	; check hmchains for any hooks and install the hooks needed
-	call cavHeaderToAppData
-	jp z,ihChainsInvalid
-	
-	; (appData+5) through (appData+MAX_HOOK+1) contain offsets for each hook's chain
-	; if non-zero there is a chain for that hook, so enable that hook
-	
-	; get the config appvar into RAM first so we can set flags
-	; dammit for now I'm going to assume it exists because it should!
-	ld hl,AV_HMConfig
-	rst 20h
-	bcall(_ChkFindSym)
-	ld a,b
-	or a
-	jr z,+_
-	; unarchive
-	ld hl,AV_HMConfig
-	rst 20h
-	bcall(_Arc_Unarc)
-	ld hl,AV_HMConfig
-	rst 20h
-	bcall(_ChkFindSym)		; need to get the pointers to it in RAM now
-_:	
-	call InitNameList
-	push de					; +0,1 are size bytes, +2,3,4,5,6 are sig - use +7,8,9
-	pop ix
-	xor a
-	ld hl,appData+5
-	
-	; yay more nasty unrolled code for lack of a decent looping structure
-	; GetHookNameAndPutInList returns with a=0 to make it easier here
-	
-	; 0
-	cp (hl)
-	jr z,+_
-	set 0,(ix+7)
-	call GetHookNameAndPutInList
-_:	inc hl
-	; 1
-	cp (hl)
-	jr z,+_
-	set 1,(ix+7)
-	ld a,1
-	call GetHookNameAndPutInList
-_:	inc hl
-	; 2
-	cp (hl)
-	jr z,+_
-	set 2,(ix+7)
-	ld a,2
-	call GetHookNameAndPutInList
-_:	inc hl
-	; 3
-	cp (hl)
-	jr z,+_
-	set 3,(ix+7)
-	ld a,3
-	call GetHookNameAndPutInList
-_:	inc hl
-	; 4
-	cp (hl)
-	jr z,+_
-	set 4,(ix+7)
-	ld a,4
-	call GetHookNameAndPutInList
-_:	inc hl
-	; 5
-	cp (hl)
-	jr z,+_
-	set 5,(ix+7)
-	ld a,5
-	call GetHookNameAndPutInList
-_:	inc hl
-	; 6
-	cp (hl)
-	jr z,+_
-	set 6,(ix+7)
-	ld a,6
-	call GetHookNameAndPutInList
-_:	inc hl
-	; 7
-	cp (hl)
-	jr z,+_
-	set 7,(ix+7)
-	ld a,7
-	call GetHookNameAndPutInList
-_:	inc hl
-	; 8
-	cp (hl)
-	jr z,+_
-	set 0,(ix+8)
-	ld a,8
-	call GetHookNameAndPutInList
-_:	inc hl
-	; 9
-	cp (hl)
-	jr z,+_
-	set 1,(ix+8)
-	ld a,9
-	call GetHookNameAndPutInList
-_:	inc hl
-	; 10
-	cp (hl)
-	jr z,+_
-	set 2,(ix+8)
-	ld a,10
-	call GetHookNameAndPutInList
-_:	inc hl
-	; 11
-	cp (hl)
-	jr z,+_
-	set 3,(ix+8)
-	ld a,11
-	call GetHookNameAndPutInList
-_:	inc hl
-	; 12
-	cp (hl)
-	jr z,+_
-	set 4,(ix+8)
-	ld a,12
-	call GetHookNameAndPutInList
-_:	inc hl
-	; 13
-	cp (hl)
-	jr z,+_
-	set 5,(ix+8)
-	ld a,13
-	call GetHookNameAndPutInList
-_:	inc hl
-	; 14
-	cp (hl)
-	jr z,+_
-	set 6,(ix+8)
-	ld a,14
-	call GetHookNameAndPutInList
-_:	inc hl
-	; 15
-	cp (hl)
-	jr z,+_
-	set 7,(ix+8)
-	ld a,15
-	call GetHookNameAndPutInList
-_:	inc hl
-	; 16
-	cp (hl)
-	jr z,+_
-	set 0,(ix+9)
-	ld a,16
-	call GetHookNameAndPutInList
-_:	inc hl
-	; 17
-	cp (hl)
-	jr z,+_
-	set 1,(ix+9)
-	ld a,17
-	call GetHookNameAndPutInList
-_:	inc hl
-	; 18
-	cp (hl)
-	jr z,+_
-	set 2,(ix+9)
-	ld a,18
-	call GetHookNameAndPutInList
-_:	inc hl
-	; 19
-	cp (hl)
-	jr z,+_
-	set 3,(ix+9)
-	ld a,19
-	call GetHookNameAndPutInList
-_:	inc hl
-	; 20
-	cp (hl)
-	jr z,+_
-	set 4,(ix+9)
-	ld a,20
-	call GetHookNameAndPutInList
-_:	inc hl
-	; 21
-	cp (hl)
-	jr z,+_
-	set 5,(ix+9)
-	ld a,21
-	call GetHookNameAndPutInList
-_:	inc hl
-	; 22
-	cp (hl)
-	jr z,+_
-	set 6,(ix+9)
-	ld a,22
-	call GetHookNameAndPutInList
-_:
-	ld hl,AV_HMConfig
-	rst 20h
-	call SafeArc
-	
-	; let's do some abusive code reuse!
-	call ChainRestoreHooks		; don't see any reason why it shouldn't work
-	; should scan for any unknown hooks first, somewhere
-	
-	bcall(_ClrLCDFull)
-	ld hl,msgHooksInstalled
-	call DisplayScrollList
-	
-	jp mainMenu
-
-
-ihConfigInvalid:
-ihChainsInvalid:
-	; HMChains doesn't exist or isn't valid.
-	; if doesn't exist, make it
-	; if invalid, yell at user
-	
-	
-	jp mainMenu
-
-
-
-
-
-	bcall(_ClrLCDFull)
-	ld a,2
-	call installHook
-	ld hl,$0000
-	ld (curRow),hl
-	ld hl,+_
-	call PutS
-	bcall(_GetKey)
-	jp mainMenu
-	
-_:	.db "Rawkey hook installed.",0
-
-
-
-advancedMenu:
 helpMenu:
 	; stub for keys for the time being
 menuStub:
-	bcall(_ClrLCDFull)
-	ld hl,$0000
-	ld (curRow),hl
+	call cls
 	ld hl,asdf
 	call PutS
 	bcall(_GetKey)
@@ -589,49 +202,78 @@ menuStub:
 
 asdf: .db "Not implemented",0
 
+
+
 exit:
-	; TODO: make sure our appvars are archived
+	; make sure all of our appvars are archived
+	ld hl,AV_HMConfig
+	rst 20h
+	bcall(_ChkFindSym)
+	jr c,+_
+	ld a,b
+	or a
+	jr nz,+_
+	call SafeArc
+_:
+	ld hl,AV_HMDatbas
+	rst 20h
+	bcall(_ChkFindSym)
+	jr c,+_
+	ld a,b
+	or a
+	jr nz,+_
+	call SafeArc
+_:
+	ld hl,AV_HMChains
+	rst 20h
+	bcall(_ChkFindSym)
+	jr c,+_
+	ld a,b
+	or a
+	jr nz,+_
+	call SafeArc
+_:	
 	
 	; Go back through the config appvar and make sure our hooks are installed.
 	call ChainRestoreHooks
+	call cls
 	bjump(_JForceCmdNoChar)
+
+
 
 
 ; Since these include executable code or data, they cannot be included at the start of
 ; the app, otherwise the code in them would be executed when the app is started!
 
-; General subroutines (ie, string printing, variable management, etc.).
-#include "routines.z80"
-
-; Our implementation of every hook.
-#include "hooks.z80"
 
 ; About menu
 #include "about.z80"
 
+; Advanced menu and chain editor
+#include "advanced.z80"
+
 ; Routines for manipulating the configuration appvar
 #include "configappvar.z80"
 
-; Routines for manipulating the hook list appvar
+; Routines for manipulating the hook chain appvar
 #include "chainsappvar.z80"
 
 ; Routines for manipulating the application database appvar
 #include "databaseappvar.z80"
+
+; Our implementation of every hook.
+#include "hooks.z80"
+
+; Routines to install and uninstall our hooks.
+#include "installuninstall.z80"
+
+; General subroutines (ie, string printing, variable management, etc.).
+#include "routines.z80"
+
+
 
 ; Constant data (user interface strings, variable names, etc.).
 #include "strings.inc"
 
 ; Hook information database.
 #include "hooklist.inc"
-
-
-; various equates needed...
-_OffPageJump		.equ	$44F2
-_FlashToRAM2		.equ	$8054
-_FillBasePageTable	.equ	$5011
-_GetAppBasePage		.equ	$50BC
-_FindAppHeaderSubField	.equ	$80AB
-MD5Temp				.equ	$8259
-MD5Hash				.equ	$8292
-MD5Length			.equ	$8269
-MD5Buffer			.equ	$83A5

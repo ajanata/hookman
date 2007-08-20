@@ -1,0 +1,432 @@
+;    HookMan - System Hook Manager for TI-83+ Series.
+;    Copyright (C) 2007  Andy Janata
+;
+;    This program is free software; you can redistribute it and/or modify
+;    it under the terms of the GNU General Public License as published by
+;    the Free Software Foundation; either version 2 of the License, or
+;    (at your option) any later version.
+;
+;    This program is distributed in the hope that it will be useful,
+;    but WITHOUT ANY WARRANTY; without even the implied warranty of
+;    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;    GNU General Public License for more details.
+;
+;    You should have received a copy of the GNU General Public License along
+;    with this program; if not, write to the Free Software Foundation, Inc.,
+;    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+;
+;	 You can contact the author via electronic mail at <ajanata@gmail.com>,
+;	 or by writing to Andy Janata, 178 E. 5th St., Brewster, OH 44613 USA.
+
+
+;	Routines to install and uninstall HookMan's hooks.
+
+
+InstallUninstall:
+	call AnyHooksInstalled
+	jp z,InstallHooks
+	
+	; uninstall hooks
+	call cfgToAppData
+	call InitNameList
+	
+	; I can't really think of a decent way to wrap this up into a loop.
+	; Any suggestions would be much appreciated.
+	
+	ld a,(appData+5)
+	ld b,a
+	
+	bit 0,b
+	jr z,+_
+	xor a
+	call uninstallHook
+	call GetHookNameAndPutInList
+_:	bit 1,b
+	jr z,+_
+	ld a,1
+	call uninstallHook
+	call GetHookNameAndPutInList
+_:	bit 2,b
+	jr z,+_
+	ld a,2
+	call uninstallHook
+	call GetHookNameAndPutInList
+_:	bit 3,b
+	jr z,+_
+	ld a,3
+	call uninstallHook
+	call GetHookNameAndPutInList
+_:	bit 4,b
+	jr z,+_
+	ld a,4
+	call uninstallHook
+	call GetHookNameAndPutInList
+_:	bit 5,b
+	jr z,+_
+	ld a,5
+	call uninstallHook
+	call GetHookNameAndPutInList
+_:	bit 6,b
+	jr z,+_
+	ld a,6
+	call uninstallHook
+	call GetHookNameAndPutInList
+_:	bit 7,b
+	jr z,+_
+	ld a,7
+	call uninstallHook
+	call GetHookNameAndPutInList
+	
+_:	ld a,(appData+6)
+	ld b,a
+	bit 0,b
+	jr z,+_
+	ld a,8
+	call uninstallHook
+	call GetHookNameAndPutInList
+_:	bit 1,b
+	jr z,+_
+	ld a,9
+	call uninstallHook
+	call GetHookNameAndPutInList
+_:	bit 2,b
+	jr z,+_
+	ld a,10
+	call uninstallHook
+	call GetHookNameAndPutInList
+_:	bit 3,b
+	jr z,+_
+	ld a,11
+	call uninstallHook
+	call GetHookNameAndPutInList
+_:	bit 4,b
+	jr z,+_
+	ld a,12
+	call uninstallHook
+	call GetHookNameAndPutInList
+_:	bit 5,b
+	jr z,+_
+	ld a,13
+	call uninstallHook
+	call GetHookNameAndPutInList
+_:	bit 6,b
+	jr z,+_
+	ld a,14
+	call uninstallHook
+	call GetHookNameAndPutInList
+_:	bit 7,b
+	jr z,+_
+	ld a,15
+	call uninstallHook
+	call GetHookNameAndPutInList
+
+_:	ld a,(appData+7)
+	ld b,a
+	bit 0,b
+	jr z,+_
+	ld a,16
+	call uninstallHook
+	call GetHookNameAndPutInList
+_:	bit 1,b
+	jr z,+_
+	ld a,17
+	call uninstallHook
+	call GetHookNameAndPutInList
+_:	bit 2,b
+	jr z,+_
+	ld a,18
+	call uninstallHook
+	call GetHookNameAndPutInList
+_:	bit 3,b
+	jr z,+_
+	ld a,19
+	call uninstallHook
+	call GetHookNameAndPutInList
+_:	bit 4,b
+	jr z,+_
+	ld a,20
+	call uninstallHook
+	call GetHookNameAndPutInList
+_:	bit 5,b
+	jr z,+_
+	ld a,21
+	call uninstallHook
+	call GetHookNameAndPutInList
+_:	bit 6,b
+	jr z,+_
+	ld a,22
+	call uninstallHook
+	call GetHookNameAndPutInList
+_:	
+	; ugh. what a waste of space.
+	
+	
+	; now clear the bits in our appvar
+	; at this point, with nothing else in the appvar, it's easier to delete it and make it again
+	ld hl,AV_HMConfig
+	rst 20h
+	bcall(_ChkFindSym)
+	; it SHOULD always exist at this point
+	jr c,+_			; but just in case it doesn't somehow, which should never happen
+	bcall(_DelVarArc)
+_:
+	call cfgCreate
+	jp c,varLowRam		; up at the top of hookman.z80 -- though we probably will never have this problem
+	
+	call cls
+	ld hl,msgHooksUninstalled
+	call DisplayScrollList
+	
+	
+	jp mainMenu
+		
+
+
+
+InstallHooks:
+	; check to make sure the config appvar is valid first
+	call cfgToAppData
+	jp z,ihConfigInvalid			; this will never happen, actually
+	
+	; check hmchains for any hooks and install the hooks needed
+	call cavHeaderToAppData
+	jp z,ihChainsInvalid
+	
+	; (appData+5) through (appData+MAX_HOOK+1) contain offsets for each hook's chain
+	; if non-zero there is a chain for that hook, so enable that hook
+	
+	; get the config appvar into RAM first so we can set flags
+	; dammit for now I'm going to assume it exists because it should!
+	ld hl,AV_HMConfig
+	rst 20h
+	bcall(_ChkFindSym)
+	ld a,b
+	or a
+	jr z,+_
+	; unarchive
+	ld hl,AV_HMConfig
+	rst 20h
+	bcall(_Arc_Unarc)
+	ld hl,AV_HMConfig
+	rst 20h
+	bcall(_ChkFindSym)		; need to get the pointers to it in RAM now
+_:	
+	call InitNameList
+	push de					; +0,1 are size bytes, +2,3,4,5,6 are sig - use +7,8,9
+	pop ix
+	xor a
+	ld hl,appData+5
+	
+	; yay more nasty unrolled code for lack of a decent looping structure
+	; GetHookNameAndPutInList returns with a=0 to make it easier here
+	
+	; 0
+	cp (hl)
+	jr z,+_
+	set 0,(ix+7)
+	call GetHookNameAndPutInList
+_:	inc hl
+	; 1
+	cp (hl)
+	jr z,+_
+	set 1,(ix+7)
+	ld a,1
+	call GetHookNameAndPutInList
+_:	inc hl
+	; 2
+	cp (hl)
+	jr z,+_
+	set 2,(ix+7)
+	ld a,2
+	call GetHookNameAndPutInList
+_:	inc hl
+	; 3
+	cp (hl)
+	jr z,+_
+	set 3,(ix+7)
+	ld a,3
+	call GetHookNameAndPutInList
+_:	inc hl
+	; 4
+	cp (hl)
+	jr z,+_
+	set 4,(ix+7)
+	ld a,4
+	call GetHookNameAndPutInList
+_:	inc hl
+	; 5
+	cp (hl)
+	jr z,+_
+	set 5,(ix+7)
+	ld a,5
+	call GetHookNameAndPutInList
+_:	inc hl
+	; 6
+	cp (hl)
+	jr z,+_
+	set 6,(ix+7)
+	ld a,6
+	call GetHookNameAndPutInList
+_:	inc hl
+	; 7
+	cp (hl)
+	jr z,+_
+	set 7,(ix+7)
+	ld a,7
+	call GetHookNameAndPutInList
+_:	inc hl
+	; 8
+	cp (hl)
+	jr z,+_
+	set 0,(ix+8)
+	ld a,8
+	call GetHookNameAndPutInList
+_:	inc hl
+	; 9
+	cp (hl)
+	jr z,+_
+	set 1,(ix+8)
+	ld a,9
+	call GetHookNameAndPutInList
+_:	inc hl
+	; 10
+	cp (hl)
+	jr z,+_
+	set 2,(ix+8)
+	ld a,10
+	call GetHookNameAndPutInList
+_:	inc hl
+	; 11
+	cp (hl)
+	jr z,+_
+	set 3,(ix+8)
+	ld a,11
+	call GetHookNameAndPutInList
+_:	inc hl
+	; 12
+	cp (hl)
+	jr z,+_
+	set 4,(ix+8)
+	ld a,12
+	call GetHookNameAndPutInList
+_:	inc hl
+	; 13
+	cp (hl)
+	jr z,+_
+	set 5,(ix+8)
+	ld a,13
+	call GetHookNameAndPutInList
+_:	inc hl
+	; 14
+	cp (hl)
+	jr z,+_
+	set 6,(ix+8)
+	ld a,14
+	call GetHookNameAndPutInList
+_:	inc hl
+	; 15
+	cp (hl)
+	jr z,+_
+	set 7,(ix+8)
+	ld a,15
+	call GetHookNameAndPutInList
+_:	inc hl
+	; 16
+	cp (hl)
+	jr z,+_
+	set 0,(ix+9)
+	ld a,16
+	call GetHookNameAndPutInList
+_:	inc hl
+	; 17
+	cp (hl)
+	jr z,+_
+	set 1,(ix+9)
+	ld a,17
+	call GetHookNameAndPutInList
+_:	inc hl
+	; 18
+	cp (hl)
+	jr z,+_
+	set 2,(ix+9)
+	ld a,18
+	call GetHookNameAndPutInList
+_:	inc hl
+	; 19
+	cp (hl)
+	jr z,+_
+	set 3,(ix+9)
+	ld a,19
+	call GetHookNameAndPutInList
+_:	inc hl
+	; 20
+	cp (hl)
+	jr z,+_
+	set 4,(ix+9)
+	ld a,20
+	call GetHookNameAndPutInList
+_:	inc hl
+	; 21
+	cp (hl)
+	jr z,+_
+	set 5,(ix+9)
+	ld a,21
+	call GetHookNameAndPutInList
+_:	inc hl
+	; 22
+	cp (hl)
+	jr z,+_
+	set 6,(ix+9)
+	ld a,22
+	call GetHookNameAndPutInList
+_:
+	ld hl,AV_HMConfig
+	rst 20h
+	call SafeArc
+	
+	; let's do some abusive code reuse!
+	call ChainRestoreHooks		; don't see any reason why it shouldn't work
+	; should scan for any unknown hooks first, somewhere
+	; ^ what did I mean by that?
+	
+	call cls
+	ld hl,msgHooksInstalled
+	call DisplayScrollList
+	
+	jp mainMenu
+
+
+ihConfigInvalid:
+	; actually this will never happen since it's checked when the app starts...
+ihChainsInvalid:
+	; HMChains doesn't exist or isn't valid.
+	; if doesn't exist, tell the user to use the chain editor first
+	; if invalid, yell at user
+	
+	ld hl,AV_HMChains
+	rst 20h
+	bcall(_ChkFindSym)
+	jr c,+_
+	; invalid
+	call cls
+	ld hl,errBadVar
+	call PutS
+	ld hl,$0001
+	ld (curRow),hl
+	ld hl,str_HMChains
+	call PutS
+	bcall(_GetKey)
+	jp exit
+	
+_:
+	; not found
+	call cls
+	ld hl,errNoChain
+	call PutS
+	bcall(_GetKey)
+	jp mainMenu
+
+
+
+
+	

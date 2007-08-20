@@ -26,36 +26,48 @@
    ;     0123456789ABCEDF
 titleHookman:
 	.db "    HookMan     ",0
-titleInstall:
-	.db "    Install     ",0
-titleAdvanced:
-	.db "    Advanced    ",0
-titleHelp:
-	.db "      Help      ",0
+	
 errLowMem:
 	.db "There is insuf- "
 	.db "ficient free RAM"
-	.db "to store the    "
-	.db "configuration   "
-	.db "file. Please en-"
-	.db "sure 25 bytes of"
-	.db "RAM are free.   "
-	.db "Press any key...",0
-errBadCfg:
-	.db "The config file "
-	.db "HMConfig is in- "
-	.db "valid. Please   "
-	.db "delete it or re-"
+	.db "to complete the "
+	.db "operation. Free "
+	.db "at least 1KB of "
+	.db "RAM and try     "
+	.db "again. Press any"
+	.db "key...",0
+errBadVar:
+	.db "The variable    "
+	.db "         is in- " 	; that space will be filled in later
+	.db "valid. Please   "	; with str_HMConfig, str_HMChains, or
+	.db "delete it or re-"	; str_HMDatbas
 	.db "name it if it is"
 	.db "something you   "
 	.db "need. Press any "
 	.db "key...",0
+errNoChain:
+	.db "The hook chain  "
+	.db "list variable   "
+	.db "HMChains doesn't"
+	.db "exist. Use Ad-  "
+	.db "vanced, Chain   "
+	.db "Editor first.   "
+	.db "Press any key...",0
+
+msgScanning:
+	.db "Scanning instal-"
+	.db "led hooks",0
+
+
 
 msgHooksInstalled:
 	.db "Hooks were installed:",0
 
 msgHooksUninstalled:
 	.db "Hooks were uninstalled:",0
+
+msgChooseChain:
+	.db "Choose hook chain to edit:",0
 	
 itemUninstall:	.db "Uninstall",0
 itemInstall:	.db "Install",0
@@ -99,7 +111,8 @@ licenseText:
 	.db "Press Enter for more.",0
 	; second screen
 	.db "Source code is available at",0
-	.db "c",$FF,"ode.goo",$FF,"gle.c",$FF,"om/p",$FF,"/hookman",0
+	;.db "c",$FF,"ode.goo",$FF,"gle.c",$FF,"om/p",$FF,"/hookman",0
+	.db "hookman.googlecode.com",0
 	.db "or by writing to Andy Janata,",0
 	.db "178 E. 5th St, Brewster, OH,",0
 	.db "44613, USA.",0
@@ -109,19 +122,25 @@ licenseText:
 ; appvars
 ; chain list
 AV_HMChains:
-	.db AppVarObj, "HMChains"
+	.db AppVarObj
+str_HMChains:
+	.db "HMChains",0		; that doesn't get in the way of Mov9ToOP1 :)
 Sig_HMChains:
 	.db "HMCL",0			; this is not a null-terminator: it is a version byte
 
 ; main config
 AV_HMConfig:
-	.db	AppVarObj, "HMConfig"
+	.db	AppVarObj
+str_HMConfig:
+	.db "HMConfig",0
 Sig_HMConfig:
 	.db "HMCF",0			; that is a version byte, not a null-terminator
 
 ; application database
 AV_HMDatbas:
-	.db AppVarObj, "HMDatbas"
+	.db AppVarObj
+str_HMDatbas:
+	.db "HMDatbas",0
 Sig_HMDatbas:
 	.db "HMDB",0			; version again
 	
