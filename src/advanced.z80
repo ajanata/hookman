@@ -46,10 +46,40 @@ ChainFirstChain		.equ	ChainOffsetTable+2		; should always be ChainOffsetTable + 
 DbOffsetTable		.equ	ChainFirstChain+2		; points to length prefix
 DbFirstEntry		.equ	DbOffsetTable+2			; should always be DbOffsetTable + count*2 +1
 
+MenuDrawStuff		.equ	DbFirstEntry+2
+ScrollPos			.equ	0
+SelectedItem		.equ	1
+DrawnItems			.equ	2
+TotalItems			.equ	3						; this is only used on single chain editors
+
+TempString			.equ	MD5Buffer				; 64 bytes for temporary strings (MD5Length and MD5Hash)
+
+HookListPtr			.equ	appBackUpScreen
+HookList			.equ	HookListPtr+2			; 30 bytes for pointers to hooks for currently editing chain
+													; note the editor will break with more than *29* apps with the same kind of hook
+OrderedHookListPtr	.equ	HookList+30
+OrderedHookList		.equ	OrderedHookListPtr+2
+
+
+; small font characters for [un]selected options
+Checked				.equ	$E0
+Unchecked			.equ	'0'
+
+; array of total known number of hooks for each chain
+HookKnownCounts		.equ	appData
+; array of currently chained number of hooks for each chain
+; BUG: Spasm didn't like MAX_HOOK there instead of 22.
+HookUsedCounts		.equ	HookKnownCounts + 22 + 1
+
 
 ;	ChainEditor: The main chain editor interface.
 ;		Needs to jp back to mainMenu when done!
 ChainEditor:
+
+	call cls
+	ld hl,msgWait
+	call PutS
+
 	; check to see if HMChains exists, and if not, create it
 	ld hl,AV_HMChains
 	rst 20h
@@ -67,26 +97,397 @@ _:
 	call APP_POP_ERRORH
 _:
 	; now HMChains is in RAM
+	; need to check it....
+	call cavHeaderToAppData
+	jp z,cavInvalid
 	; and since I'm tired of streaming stuff from archive, I'm
 	; going to unarchive HMDatbas as well for the time being.
 	ld hl,AV_HMDatbas
 	rst 20h
 	bcall(_ChkFindSym)
 	; it WILL exist if we get to this routine
+	; but just in case...
+	jp c,mainMenu
 	ld a,b
 	or a
-	jr z,_+
+	jr z,+_
 	ld hl,ceNoRam
 	call APP_PUSH_ERRORH
 	bcall(_Arc_Unarc)
 	call APP_POP_ERRORH
 _:
+	; we can go back to this point when we go back to the editor
+	; from a sub-section since we don't need to check all that other
+	; stuff again
+ChainEditorRestart:
 	; now HMDatbas is in RAM too
+	; it is checked when we start so it is valid at this point
+	
+	; look them up and store to the pointers
+	call LookUpChainAndDb
+	
+	call GetHookCounts
+	
 	bcall(_ClrLCDFull)
 	ld hl,0
 	ld (penCol),hl
 	ld hl,msgChooseChain
 	call VPutS
+	
+	ld ix,MenuDrawStuff
+	ld (ix+ScrollPos),0
+	ld (ix+SelectedItem),0
+
+	; add 6 to penRow for new line, reset penCol to 0
+
+ceRedrawMain:
+	ld (ix+DrawnItems),0
+	call ClearAllButTop
+	ld hl,$0700
+	ld (penCol),hl
+
+  ;di
+  ;halt
+
+ce_rm_Loop:
+	; see if this is the selected item
+	ld a,(ix+DrawnItems)
+	add a,(ix+ScrollPos)
+	cp (ix+SelectedItem)
+	jr nz,+_
+	; it is so turn inverse on
+	set textInverse,(iy+textFlags)
+_:
+	; a still has the hook number
+	ld hl,HookInfoLUT
+	add a,a
+	ld e,a
+	ld d,0
+	add hl,de
+	call LdHLInd
+	ld e,5
+	add hl,de				; point to string
+	call VPutS_ix
+	ld hl,TempString
+	ld a,' '
+	ld (hl),a
+	inc hl
+	ld a,$28				; ( - spasm has issues with literal parens
+	ld (hl),a
+	inc hl
+	push hl					; [string]
+	ld hl,HookUsedCounts
+	ld a,(ix+DrawnItems)
+	add a,(ix+ScrollPos)	; hook number
+	ld e,a
+	ld d,0
+	add hl,de
+	ld a,(hl)
+	pop hl					; string
+	add a,'0'				; this will only work for up to 9 -- expand later! TODO
+	ld (hl),a
+	inc hl
+	ld a,$2F				; / - spasm threw a floating point exception when I literalled that
+	ld (hl),a
+	inc hl
+	push hl					; [string]
+	ld hl,HookKnownCounts
+	ld a,(ix+DrawnItems)
+	add a,(ix+ScrollPos)	; hook number
+	ld e,a
+	ld d,0
+	add hl,de
+	ld a,(hl)
+	pop hl					; string
+	add a,'0'				; this will only work for up to 9 -- expand later! TODO
+	ld (hl),a
+	inc hl
+	ld a,$29				; ) - spasm has issues with literal parens
+	ld (hl),a
+	inc hl
+	xor a
+	ld (hl),a
+	ld hl,TempString
+	call VPutS_ix
+	; see if this is the selected item
+	ld a,(ix+DrawnItems)
+	add a,(ix+ScrollPos)
+	cp (ix+SelectedItem)
+	jr nz,+_
+	; it is so turn inverse off
+	res textInverse,(iy+textFlags)
+_:
+	xor a
+	ld (penCol),a
+	ld a,(penRow)
+	add a,6
+	ld (penRow),a
+	inc (ix+DrawnItems)
+	ld a,9
+	cp (ix+DrawnItems)
+	jp nz,ce_rm_Loop
+	
+
+	; display scroll arrows
+	ld a,(ix+ScrollPos)
+	or a
+	jr z,+_
+	; draw up arrow
+	ld hl,$0F01
+	ld (curRow),hl
+	ld a,$1E			; up arrow
+	bcall(_PutC)
+_:
+	ld a,(ix+ScrollPos)
+	cp MAX_HOOK-8		; not -9
+	jr z,+_
+	; draw down arrow
+	ld hl,$0F07
+	ld (curRow),hl
+	ld a,$1F			; down arrow
+	bcall(_PutC)
+_:
+
+ce_Main_KeyLoop:
+	; TODO: Check for kAlphaUp/kAlphaDown for page scrolling
+	bcall(_GetKey)
+	cp kEnter
+	jp z,ce_EditChain
+	cp kRight
+	jp z,ce_EditChain
+	cp kClear
+	jp z,mainMenu
+	cp kLeft
+	jp z,mainMenu
+	cp kQuit
+	jp z,exit
+
+	cp kUp
+	jr nz,+_
+	; see if Up is allowed
+	ld a,(ix+SelectedItem)
+	or a
+	jr z,ce_Main_KeyLoop
+	; move the selection bar
+	dec (ix+SelectedItem)
+	; see if we need to scroll
+	ld a,(ix+SelectedItem)
+	cp (ix+ScrollPos)
+	jp nc,ceRedrawMain
+	dec (ix+ScrollPos)
+	jp ceRedrawMain
+	
+	
+_:
+	cp kDown
+	jr nz,ce_Main_KeyLoop
+	; see if Down is allowed
+	ld a,(ix+SelectedItem)
+	cp MAX_HOOK
+	jr z,ce_Main_KeyLoop
+	; move the selection bar
+	inc (ix+SelectedItem)
+	; see if we need to scroll
+	ld a,(ix+ScrollPos)
+	add a,8
+	cp (ix+SelectedItem)
+	jp nc,ceRedrawMain
+	inc (ix+ScrollPos)
+	jp ceRedrawMain
+	
+
+
+
+;	ce_EditChain: Edit a single chain.
+;	IN: MenuDrawStuff+SelectedItem: Hook chain to edit
+;	OUT: Jumps back to ChainEditor.
+ce_EditChain:
+	; first check to make sure there are known hooks for this chain
+	ld ix,MenuDrawStuff				; should not be required but whatever
+	ld hl,HookKnownCounts
+	ld e,(ix+SelectedItem)
+	ld d,0
+	add hl,de
+	ld a,(hl)
+	or a
+	jr nz,+_
+	; there are no hooks for this chain...
+	; just dump back to the key loop :)
+	jr ce_Main_KeyLoop
+_:
+
+  ;di
+  ;halt
+  
+	; there is at least 1 hook that we know about
+	ld hl,HookList
+	ld (HookListPtr),hl
+	xor a
+	ld (hl),a
+	ld de,HookList+1
+	ld bc,61
+	ldir						; clear out that area
+	ld hl,OrderedHookList
+	ld (OrderedHookListPtr),hl
+	
+	ld hl,(DbOffsetTable)
+	ld a,(hl)
+ce_ec_BuildLoop:
+	or a
+	jr z,ce_ec_BuildLoopDone
+	dec a
+	push af					; [app in db]
+	ld (TempString),a		; save offset to app in case we need it for later
+	add a,a
+	inc a
+	ld hl,(DbOffsetTable)
+	ld d,0
+	ld e,a
+	add hl,de
+	call LdHLInd
+	ld de,(DbFirstEntry)
+	add hl,de				; app entry
+	ld de,9
+	add hl,de				; number of hooks
+	ld b,(hl)				; if there's an app entry there will be at least 1 hook for it
+	inc hl
+	
+ce_ec_bl_AppLoop:
+	ld a,(hl)				; hook number
+	cp (ix+SelectedItem)
+	jr nz,+_
+	; this app has the hook we want
+	ld a,(TempString)		; offset of this app in the database offset list
+	inc a					; we need this to be the offset as it is in the offset table
+	ld hl,(HookListPtr)
+	ld (hl),a
+	inc hl
+	ld (HookListPtr),hl
+	; we're done with this app so we can get out of the app loop
+	jr ce_ec_bl_AppLoopDone
+	
+_:
+	inc hl
+	inc hl
+	inc hl
+	inc hl					; point to next one
+	djnz ce_ec_bl_AppLoop
+ce_ec_bl_AppLoopDone:
+	
+	pop af				; app in db
+	jr ce_ec_BuildLoop	
+ce_ec_BuildLoopDone:
+	; HookList has MenuDrawStuff+SelectedItem offsets into the database's offset table
+	; in the order they were found in the database
+	; now go through the chain and make a list of those,
+	; then re-order the first list to have the active ones at the start in the proper order
+	
+	ld a,(ix+SelectedItem)			; hook number
+	ld hl,(ChainOffsetTable)
+	ld e,a
+	ld d,0
+	add hl,de
+	ld a,(hl)
+	or a
+	jp z,ce_ec_OrderHooksDoneWithActive		; skip all of this if there aren't any hooks in the chain
+	dec a
+	ld l,a					; now do the math to get to the chain list
+	ld h,0
+	add hl,hl				; *2
+	ld d,h
+	ld e,l
+	add hl,hl				; *4
+	add hl,de				; *6
+	ex de,hl
+	ld hl,(ChainFirstChain)
+	add hl,de
+	; now hl is the start of the chain for this hook
+
+  ;di
+  ;halt
+ce_ec_OrderHooks:
+	ld a,(hl)
+	inc a
+	jr z,ce_ec_OrderHooksDoneWithActive
+	ld de,5
+	add hl,de				; app id byte
+	ld a,(hl)
+	push hl					; [hook node]
+	; save into ordered list
+	ld hl,(OrderedHookListPtr)
+	ld (hl),a
+	inc hl
+	ld (OrderedHookListPtr),hl
+	; remove from unordered list
+	; find it first
+	ld hl,HookList
+	ld bc,30
+	cpir					; look for this app id/database offset
+	dec hl					; backtrack a spot
+	push hl					; [remove] [hook node]
+	ld de,OrderedHookListPtr-1
+	or a					; clear carry
+	ex de,hl
+	sbc hl,de
+	ld b,h
+	ld c,l
+	pop de					; remove [hook node]
+	ld h,d
+	ld l,e
+	inc hl
+	dec bc
+	ldir					; shift everything else down
+	pop hl					; hook node
+	inc hl
+	jr ce_ec_OrderHooks
+	
+	
+ce_ec_OrderHooksDoneWithActive:
+	; all the hooks that are currently in the chain are put at
+	; OrderedHookList in the order they are found in the chain
+	; remaining hooks are still at HookList, condensed down
+	; just copy them over
+	ld hl,(OrderedHookListPtr)
+	ld de,HookList
+_:
+	ld a,(de)
+	or a
+	jr z,ce_ec_DoneOrdering
+	ld (hl),a
+	inc hl
+	inc de
+	jr -_
+ce_ec_DoneOrdering:
+	
+  ;di
+  ;halt
+  
+	; ok so now OrderedHookList has the hooks in order starting with the active ones
+	
+	
+	
+	
+	
+	
+	
+	ld a,(ix+SelectedItem)
+	ld (ix+TotalItems),a
+	
+	
+	ld (ix+ScrollPos),0
+	ld (ix+SelectedItem),0
+	
+	
+ce_ec_Redraw:
+	ld (ix+DrawnItems),0
+	
+	
+	
+	
+	
+	
+	
+	jp ChainEditorRestart
 
 
 
@@ -96,6 +497,45 @@ _:
 
 
 
+
+
+
+
+
+
+
+
+
+;	LookUpChainAndDb: ChkFindSyms HMChains and HMDatbas and stores the appropriate
+;		addresses to ChainOffsetTable, ChainFirstEntry, DbOffsetTable, and DbFirstEntry
+;	IN: none
+;	OUT: ChainOffsetTable, ChainFirstEntry, DbOffsetTable, and DbFirstEntry
+;	DESTROYS: all
+LookUpChainAndDb:
+	ld hl,AV_HMChains
+	rst 20h
+	bcall(_ChkFindSym)
+	ld hl,7					; 2 size + 5 sig
+	add hl,de
+	ld (ChainOffsetTable),hl
+	ld de,MAX_HOOK+1
+	add hl,de
+	ld (ChainFirstChain),hl
+	
+	ld hl,AV_HMDatbas
+	rst 20h
+	bcall(_ChkFindSym)
+	ld hl,7
+	add hl,de
+	ld (DbOffsetTable),hl
+	ld a,(hl)
+	add a,a
+	inc a
+	ld d,0
+	ld e,a
+	add hl,de
+	ld (DbFirstEntry),hl
+	ret
 
 
 
@@ -106,6 +546,114 @@ ceNoRam:
 	call PutS
 	bcall(_GetKey)
 	jp mainMenu
+
+
+
+;	getTotalHookCounts: Counts up the number of apps that have every hoook
+;		and stores to HookKnownCounts.
+;	IN: ChainOffsetTable, ChainFirstEntry, DbOffsetTable, and DbFirstEntry
+;	OUT: HookKnownCounts and HookUsedCounts
+;	DESTROYS: all registers
+getHookCounts:
+	; zero out both arrays
+	xor a
+	ld hl,HookKnownCounts
+	ld (hl),a
+	ld bc,MAX_HOOK*2+1
+	ld de,HookKnownCounts+1
+	ldir
+	
+	; start with total counts
+	ld hl,(DbOffsetTable)
+	ld a,(hl)
+ghcTotalLoop:
+	or a					; [app in db] [ret]
+	jr z,ghcTotalLoopDone
+	dec a
+	push af
+	add a,a
+	inc a
+	ld hl,(DbOffsetTable)
+	ld d,0
+	ld e,a
+	add hl,de
+	call LdHLInd
+	ld de,(DbFirstEntry)
+	add hl,de				; app entry
+	ld de,9
+	add hl,de				; number of hooks
+	ld b,(hl)				; if there's an app entry there will be at least 1 hook for it
+	inc hl
+_:
+	ld e,(hl)
+	push hl					; [app block] [app in db] [ret]
+	ld hl,HookKnownCounts
+	ld d,0
+	add hl,de
+	inc (hl)
+	pop hl					; [app block] [app in db] [ret]
+	inc hl
+	inc hl
+	inc hl
+	inc hl					; point to next one
+	djnz -_
+	
+	pop af				; app in db [ret]
+	jr ghcTotalLoop
+	
+ghcTotalLoopDone:
+	; now count hooks active in chains
+	ld hl,(ChainOffsetTable)
+	xor a
+ghcActiveLoop:
+	cp MAX_HOOK
+	jr z,ghcActiveLoopDone
+	push af					; [hook in list] [ret]
+	ld a,(hl)
+	or a
+	jr z,ghc_al_NoChain
+	push hl					; [chain offset] [hook in list] [ret]
+	;ld hl,(ChainFirstEntry)
+	dec a
+	ld l,a					; now do the math to get to the chain list
+	ld h,0
+	add hl,hl				; *2
+	ld d,h
+	ld e,l
+	add hl,hl				; *4
+	add hl,de				; *6
+	ex de,hl
+	ld hl,(ChainFirstChain)
+	add hl,de
+	; now hl is the start of the chain for this hook
+_:
+	ld a,(hl)
+	cp $FF					; end of node marker
+	jr z,+_
+	push hl					; [chain ptr] [chain offset] [hook in list] [ret]
+	ld hl,HookUsedCounts
+	ld d,0
+	ld e,a
+	add hl,de
+	inc (hl)
+	pop hl					; chain ptr [chain offset] [hook in list] [ret]
+	ld e,6
+	add hl,de				; point to next node
+	jr -_
+	
+_:
+
+	pop hl					; chain offset [hook in list] [ret]
+ghc_al_NoChain:
+	inc hl
+	
+	pop af					; hook in list [ret]
+	inc a
+	jr ghcActiveLoop
+	
+ghcActiveLoopDone:
+  	ret
+
 
 
 ;	menu data block	

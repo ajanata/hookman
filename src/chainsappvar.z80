@@ -106,4 +106,27 @@ _:
 	scf
 	ccf
 	ret
-	
+
+
+;	calInvalid: Displays the "invalid variable" message for HMChains.
+;	IN: none
+;	OUT: Does not return. Jumps to exit.
+cavInvalid:
+	call cls
+	ld hl,errBadVar
+	call PutS
+	ld hl,$0001
+	ld (curRow),hl
+	ld hl,str_HMChains
+	call PutS
+	bcall(_GetKey)
+	jp exit
+
+
+
+
+
+
+
+
+

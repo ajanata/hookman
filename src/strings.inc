@@ -68,7 +68,15 @@ msgHooksUninstalled:
 
 msgChooseChain:
 	.db "Choose hook chain to edit:",0
-	
+
+msgEditChain:
+	.db "Edit chain: (+/-/Enter)",0
+
+msgWait:
+	.db "Please wait...",0
+
+
+
 itemUninstall:	.db "Uninstall",0
 itemInstall:	.db "Install",0
 itemAdvanced:	.db "Advanced",0

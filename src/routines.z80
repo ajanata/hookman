@@ -39,6 +39,13 @@ PutS:
 	jr PutS
 	
 
+;	VPutS_ix: VPutS that does not destroy ix
+VPutS_ix:
+	push ix
+	call VPutS
+	pop ix
+	ret
+	
 ;	VPutS: Prints a null-terminated string in the small font at (penRow, penCol).
 ;	IN: (hl): pointer to null-terminated string. No newline facilities.
 ;		 (penRow)
@@ -308,12 +315,6 @@ _:
 
 
 
-; equates for the string lists
-listOffsets		.equ	appBackUpScreen+400
-listStrings		.equ	appBackUpScreen
-
-
-
 ;	InitNameList: Clears the offsets list so GetHookNameAndPutInList functions properly.
 ;	IN: None
 ;	OUT: listOffsets's first MAX_HOOK+1 bytes are set to 0.
@@ -424,15 +425,7 @@ _:
 	ld (hl),a		; the last offset is a junk one, so write over it
 
 dslLoop:
-	ld hl,$0001
-	ld (curRow),hl
-	push bc
-	ld b,7*16
-	ld a,' '
-_:
-	bcall(_PutC)	; clear all but top line of screen
-	djnz -_
-	pop bc
+	call ClearAllButTop
 	
 	ld hl,$0700
 	ld (penCol),hl
@@ -591,7 +584,20 @@ cls:
 	ret
 
 
-
-
+;	ClearAllButTop: Clears all but the top row of the screen.
+;	IN: none
+;	OUT: none
+;	DESTROYS: a, hl
+ClearAllButTop:
+	ld hl,$0001
+	ld (curRow),hl
+	push bc
+	ld b,7*16
+	ld a,' '
+_:
+	bcall(_PutC)	; clear all but top line of screen
+	djnz -_
+	pop bc
+	ret
 
 

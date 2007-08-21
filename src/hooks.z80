@@ -562,11 +562,10 @@ _:
     ld l,(ix+wrHookBasepage)                        ; offset for head of chain
     dec l                           ; the first offset is stored as 1 but it really needs to be 0 -- adjust everything back 1
     push de                         ; [ptr in chain list] [ix] [ret addr]
+	add hl,hl                       ; multiply by 6 bytes per node
     ld d,h
     ld e,l
-    add hl,hl                       ; multiply by 6 bytes per node
     add hl,hl
-    add hl,de
     add hl,de
     pop de                          ; [ix] [ret addr]
     ex de,hl
@@ -650,8 +649,6 @@ ChainVerify:
 ;	ChainGetRelatives: Get all other hooks from the same app as the next in the chain and
 ;		load them into the RAM blocks.
 ;		Also loads the next hook into the ram block for the active hook.
-;			FIXME: Disable and conditionally enable interrupts around this routine,
-;					at least the parts that mess with the hook blocks.
 ;	IN: workram pointers set up properly - wrCheck*, wrHookBasepage
 ;	OUT: Nothing
 ;	DESTROYS: fixme

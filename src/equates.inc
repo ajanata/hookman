@@ -34,3 +34,9 @@ _FindAppHeaderSubField	.equ	$80AB
 MD5Temp					.equ	$8259
 MD5Hash					.equ	$8292
 MD5Length				.equ	$8269
+MD5Buffer				.equ	$83A5
+
+
+; equates for the string lists
+listOffsets		.equ	appBackUpScreen+400
+listStrings		.equ	appBackUpScreen
