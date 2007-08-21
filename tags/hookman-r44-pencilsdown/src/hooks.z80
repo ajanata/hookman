@@ -1,0 +1,1002 @@
+;    HookMan - System Hook Manager for TI-83+ Series.
+;    Copyright (C) 2007  Andy Janata
+;
+;    This program is free software; you can redistribute it and/or modify
+;    it under the terms of the GNU General Public License as published by
+;    the Free Software Foundation; either version 2 of the License, or
+;    (at your option) any later version.
+;
+;    This program is distributed in the hope that it will be useful,
+;    but WITHOUT ANY WARRANTY; without even the implied warranty of
+;    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;    GNU General Public License for more details.
+;
+;    You should have received a copy of the GNU General Public License along
+;    with this program; if not, write to the Free Software Foundation, Inc.,
+;    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+;
+;	 You can contact the author via electronic mail at <ajanata@gmail.com>,
+;	 or by writing to Andy Janata, 178 E. 5th St., Brewster, OH 44613 USA.
+
+
+;	This file contains HookMan's implementaion of every hook. These are just
+;	stubs which stick a number into b (after pushing bc to the stack) and jump
+;	to a unified hook handler.
+;	Also contains utility routines to (un)install hooks.
+
+;	Every hook must start with a $83 byte. This is used to verify the address
+;	of the hook is valid. It is not executed. ($83 is "add a,e", in case you
+;	were wondering.)
+
+
+; Each hook is 1+1+2+3=7 bytes
+
+;9B78 - Link Activity Hook
+hookCode:
+hookLinkActivity:
+	.db $83
+	push bc
+	ld b,LinkActivityHook
+	jp doHook
+
+;9B7C - Cursor Hook
+hookCursor:
+	.db $83
+	push bc
+	ld b,CursorHook
+	jp doHook
+	
+;9B84 - Raw Key Hook
+hookRawKey:
+	.db $83
+	push bc
+	ld b,RawKeyHook
+	jp doHook
+	
+;9B88 - GetCSC Hook
+hookGetCSC:
+	.db $83
+	push bc
+	ld b,GetCSCHook
+	jp doHook
+	
+;9B8C - Homescreen Hook
+hookHomescreen:
+	.db $83
+	push bc
+	ld b,HomescreenHook
+	jp doHook
+	
+;9B90 - Window Hook
+hookWindow:
+	.db $83
+	push bc
+	ld b,WindowHook
+	jp doHook
+	
+;9B94 - Graph Hook
+hookGraph:
+	.db $83
+	push bc
+	ld b,GraphHook
+	jp doHook
+	
+;9B98 - Y= Hook
+hookYEqu:
+	.db $83
+	push bc
+	ld b,YEquHook
+	jp doHook
+	
+;9B9C - Font Hook
+hookFont:
+	.db $83
+	push bc
+	ld b,FontHook
+	jp doHook
+	
+;9BA0 - Regraph Hook
+hookRegraph:
+	.db $83
+	push bc
+	ld b,RegraphHook
+	jp doHook
+	
+;9BA4 - Graphics Hook
+hookGraphics:
+	.db $83
+	push bc
+	ld b,GraphicsHook
+	jp doHook
+	
+;9BA8 - Trace Hook
+hookTrace:
+	.db $83
+	push bc
+	ld b,TraceHook
+	jp doHook
+	
+;9BAC - Parser Hook
+hookParser:
+	.db $83
+	push bc
+	ld b,ParserHook
+	jp doHook
+	
+;9BB0 - App Change Hook
+hookAppChange:
+	.db $83
+	push bc
+	ld b,AppChangeHook
+	jp doHook
+	
+;9BB4 - Catalog 1 Hook
+hookCatalog1:
+	.db $83
+	push bc
+	ld b,Catalog1Hook
+	jp doHook
+	
+;9BB8 - Help Hook
+hookHelp:
+	.db $83
+	push bc
+	ld b,HelpHook
+	jp doHook
+	
+;9BBC - cxRedisp Hook
+hookcxRedisp:
+	.db $83
+	push bc
+	ld b,cxRedispHook
+	jp doHook
+	
+;9BC0 - Menu Hook
+hookMenu:
+	.db $83
+	push bc
+	ld b,MenuHook
+	jp doHook
+	
+;9BC4 - Catalog 2 Hook
+hookCatalog2:
+	.db $83
+	push bc
+	ld b,Catalog2Hook
+	jp doHook
+	
+;9BC8 - Token Hook
+hookToken:
+	.db $83
+	push bc
+	ld b,TokenHook
+	jp doHook
+	
+;9BCC - Localize Hook
+hookLocalize:
+	.db $83
+	push bc
+	ld b,LocalizeHook
+	jp doHook
+	
+;9BD0 - Silent Link Hook
+hookSilentLink:
+	.db $83
+	push bc
+	ld b,SilentLinkHook
+	jp doHook
+	
+;9BD4 - USB Activity Hook
+hookUSBActivity:
+	.db $83
+	push bc
+	ld b,USBActivityHook
+	jp doHook
+	
+
+
+;	Actually process the hook.
+;	IN: b: Hook identification number (see defines in hooklist.inc).
+;	   top of stack: Old bc to pass to the real hook.
+;	FIXME: save ix
+;	FIXME: Probably shoud stick the OPs somewhere too.
+doHook:	
+	; STACK: [bc] [ret addr]
+	push af
+	push de
+	push hl
+	; [hl] [de] [af] [bc] [ret addr]
+	ld a,b
+	ld ($FFFF),a			; store the hook number to $FFFF for use later
+	call ChainInit
+	jp c,SomethingBroke
+_:
+	call ChainNext
+	jr c,++_				; end of chain
+	call ChainVerify
+	jr nz,-_			; hook isn't valid
+	call ChainGetRelatives
+	; now do the chaining!
+	; workram+wrHookAddrL (3 bytes) should be usable for _OffPageJump
+	pop hl
+	pop de
+	pop af
+	pop bc
+	ld ix,+_
+	push ix
+	ld ix,workram+wrHookAddrL
+	push ix
+	bjump(_OffPageJump)
+	; probably eventually I'm going to want to check the flags from the hook
+	; we just ran to see if it wants to ignore this event, and just stop
+	; the chain in that case -- but not now TODO
+	; (this would be different for most of the hooks)
+	
+_:	; push all the registers again
+	push bc
+	push af
+	push de
+	push hl
+	jr --_
+
+
+_:	; we're done!
+	; need to restore our hook
+	call ChainRestoreHooks
+	;jp exitHook
+	; save a handful of cycles on every hook
+
+
+;	Clean up the registers and $FFFF to exit the hook cleanly
+exitHook:
+	xor a
+	ld ($FFFF),a
+	pop hl
+	pop de
+	pop af
+	pop bc
+	ret				; this returns back to the OS after the hook
+	
+	
+;	SomethingBroke: Something along the way broke. Probably can't find the chain list
+;		appvar, or it isn't a valid chain list, or something equally as fatal.
+;		Throw shit in the air and make a commotion.
+;		Perhaps disable the hook that caused this so we don't have to clean up every time.
+;			FIXME: Need to run a hook which does the bare minimum required for normal
+;			operation. This will not be fun for the localize hook.
+;	IN: Stack should be [hl] [de] [af] [bc] [ret addr]
+;		($FFFF) should be hook number
+SomethingBroke:
+	; FIXME FIXME FIXME FIXME
+
+	; just go through exitHook for now
+	jp exitHook
+
+
+
+
+	
+;	Install the given hook number. Assumes that any current hook has
+;	been saved if needed and also that there are hooks in the chain
+;	that belong to this hook.
+;	Interrupts-safe. (Will disable interrupts while running but
+;	turn them back on if they were on when this routine was called.)
+;	IN: a: Hook number to install.
+;	OUT: hook is installed and enabled
+;	DESTROYS: a, de, hl
+installHook:
+	push bc
+	ld b,a
+	ld a,i			; save interrupts status (iff2) into p/v flag
+	di				; so the old hook can't be run, if it's already active
+	push af			; [iff2] [ret]
+	ld a,b
+	ld hl,HookInfoLUT
+	ld de,hookCode
+	or a			; we need to skip our loop entirely for hook 0
+	jp z,++_
+	ld b,a
+_:
+	inc hl			; the LUT has 2-byte entries
+	inc hl
+	inc de			; each hook's code is 7 bytes
+	inc de			; 2
+	inc de
+	inc de			; 4
+	inc de
+	inc de			; 6
+	inc de
+	djnz -_
+_:
+	; now hl points to the entry in the LUT and de points to the code for that hook
+	;bcall(_LdHLInd)
+	call LdHLInd
+	; now hl points to the actual information block for the hook
+	inc hl
+	push hl
+	;bcall(_LdHLInd)		; yay pointer to a pointer!
+	call LdHLInd
+	; and now, finally, hl points to the hook block in RAM
+	; de still points to the address of our hook handler
+	ld (hl),e
+	inc hl
+	ld (hl),d
+	in a,(6)		; our page
+	inc hl
+	ld (hl),a		; now the hook ram block is set up right
+	pop hl			; hl points to the ram block address in the hook info block now
+	inc hl			; move past ram block address
+	inc hl
+	ld b,0
+	ld c,(hl)		; bc now has the flags offset
+	ex de,hl		; de points to flag offset byte in hook info block, hl is junk
+	ld hl,flags
+	add hl,bc		; hl points to the flag byte
+	inc de			; de points to bitmask for hook enable flag
+	ld a,(de)		; load the bitmask into a
+	or (hl)			; set the bit for this hook
+	ld (hl),a		; store it back to the flag byte
+	; ... and I think we're done
+	pop af			; p/v set if interrupts were enabled before getting here
+	jp po,+_		; po: checks to see if interrupts are OFF. pe for ON
+	ei
+_:
+	pop bc
+	ret
+
+
+;	Uninstall the given hook number.
+;	Interrupts-safe. (Will disable interrupts while running but
+;	turn them back on if they were on when this routine was called.)
+;	IN: a: Hook number to uninstall.
+;	OUT: OS hook block is cleared and disabled
+;	DESTROYS: de, hl
+uninstallHook:
+	push af
+	push bc
+	ld b,a
+	ld a,i			; save interrupts status (iff2) into p/v flag
+	di				; so the old hook can't be run, if it's already active
+	push af			; [iff2] [ret]
+	ld a,b
+	ld hl,HookInfoLUT
+	or a			; we need to skip our loop entirely for hook 0
+	jp z,++_
+	ld b,a
+_:
+	inc hl			; the LUT has 2-byte entries
+	inc hl
+	djnz -_
+_:
+	; now hl points to the entry in the LUT
+	;bcall(_LdHLInd)
+	call LdHLInd
+	; now hl points to the actual information block for the hook
+	inc hl
+	push hl
+	;bcall(_LdHLInd)		; yay pointer to a pointer!
+	call LdHLInd
+	; and now, finally, hl points to the hook block in RAM
+	xor a
+	ld b,4
+_:					; clear OS hook block
+	ld (hl),a
+	inc hl
+	djnz -_
+	
+	pop hl			; hl points to the ram block address in the hook info block now
+	inc hl			; move past ram block address
+	inc hl
+	ld b,0
+	ld c,(hl)		; bc now has the flags offset
+	ex de,hl		; de points to flag offset byte in hook info block, hl is junk
+	ld hl,flags
+	add hl,bc		; hl points to the flag byte
+	inc de			; de points to bitmask for hook enable flag
+	ld a,(de)		; load the bitmask TO ENABLE HOOK into a
+	cpl				; now the bitmask to only leave other bits set :)
+	and (hl)		; clear the bit for this hook
+	ld (hl),a		; store it back to the flag byte
+	; ... and I think we're done
+
+	pop af
+	jp po,+_
+	ei
+_:
+	pop bc
+	pop af
+	ret	
+
+
+; Routines for getting hook chain stuff:
+;	ChainInit - chain number - finds chain, sets up pointers
+;	ChainNext - pulls next node into ram
+;	ChainVerify - makes sure next node (one ChainNext got) is still a valid hook
+;	ChainGetRelatives - scan hook chain list for relatives of the next hook to call (ie, hooks from same app)
+;					and put them into the hook blocks. also stores THIS hook into its block
+;	ChainRestoreHooks - restore hooks that were needed for relatives
+;
+;	ChainFetchByte - fetch byte from HMChains into a spot in ram. currenly a wrapper for LoadCIndPaged_inc
+;				also checks the "is HMChains archived" bit and just copies the data if it isn't
+;	ChainFetchWord - fetch word ....
+
+ixbackup .equ symTable+1
+workram	.equ ixbackup+2		; change if needed - for current chain node, and backing up stuff, and pointers
+
+; layout:
+; byte 0: flags
+;		bit 0: 1 if HMChains isn't archived
+; byte 1: page of next byte in HMChains
+; bytes 2-3: address of next byte in HMChains
+; byte 4: basepage of active hook
+; bytes 5-6: address of active hook
+; byte 7: hookpage of active hook
+wrFlags			.equ 0
+wrFlagRAM		.equ 0
+
+; the location of the next node in the chain we are processing
+wrChainPage		.equ 1
+wrChainAddrL	.equ 2
+wrChainAddrH	.equ 3
+; the location of the hook of the current node we are processing
+; this is used with _OffPageJump, as well
+wrHookBasepage	.equ 4
+wrHookAddrL		.equ 5
+wrHookAddrH		.equ 6
+wrHookHookpage	.equ 7
+; the location of the first node in the chains appvar
+wrCheckPage		.equ 8
+wrCheckAddrL	.equ 9
+wrCheckAddrH	.equ 10
+
+
+
+
+
+
+
+;	ChainInit: Initializes pointers for walking the hook chain
+;	IN: a: hook number
+;	OUT: pointers initialized
+;		carry flag: set if HMChains appvar not found, cannot do hook chains
+;	DESTROYS: af, bc, de, hl  (PRESERVES: ix)
+ChainInit:
+	push ix				; [ix] [ret addr]
+	push af				; [hook num] [ix] [ret addr]
+	ld ix,workram
+	ld hl,AV_HMChains
+	rst 20h				; rMOV9TOOP1
+	bcall(_ChkFindSym)
+	jr nc,+_
+	; not found
+	pop af
+	pop ix
+	ret
+_:
+	ld a,b
+	or a
+	jr nz,+_
+	; it isn't archived... that should not happen
+	; oh well, guess we deal with it
+	set wrFlagRAM,(ix+wrFlags)
+	inc de
+	inc de				; get past size bytes
+	jr ++_
+_:
+	; it's in archive, yay, happy fun time
+	res wrFlagRAM,(ix+wrFlags)
+	ex de, hl			; I *think* not doing first ex de,hl, and putting 20 into hl, may work
+	ld de,20			; skip over data valid flag, data length, symbol entry copy,
+	call BHL_plus_DE	; name length, type byte, and name, to point to data
+	ex de,hl	
+_:	
+	; now check the signature to make sure it's a valid chain
+	ex de,hl
+	ld de,Sig_HMChains
+	
+	;	there aren't enough registers to do this in a loop
+	; can be opitimized later if needed
+	; 1
+	call ChainFetchByte
+	ld a,(de)
+	inc de
+	cp c
+	jr nz,+_
+	; 2
+	call ChainFetchByte
+	ld a,(de)
+	inc de
+	cp c
+	jr nz,+_
+	; 3
+	call ChainFetchByte
+	ld a,(de)
+	inc de
+	cp c
+	jr nz,+_
+	; 4
+	call ChainFetchByte
+	ld a,(de)
+	inc de
+	cp c
+	jr nz,+_
+	; 5
+	call ChainFetchByte
+	ld a,(de)
+	cp c					; in the future, we will have to support older versions of chain lists
+	jr z,++_				; but there is only one version for now
+	
+_:
+	; the sig was bad, can't use it for a chain, bail out
+	pop af
+	pop ix
+	scf
+	ret
+	
+_:
+	; now b:hl points to the beginning of the offset table
+
+	
+	pop af				; a: hook num			[ix] [ret addr]
+	push af                         ; [hook num] [ix] [ret addr]
+    ld d,0
+    ld e,a
+    call BHL_plus_DE        ; get offset into table for this hook
+    call ChainFetchByte
+    ld (ix+wrChainPage),b
+    ld (ix+wrHookBasepage),c                        ; ix+wrHookBasepage temporarily holds offset of head of chain
+    pop bc                          ; b: hook num c: old f          [ix] [ret addr]
+    ld a,MAX_HOOK
+    sub b
+    ld d,0
+    ld e,a
+    ld b,(ix+wrChainPage)
+    call BHL_plus_DE
+    
+    ; b:hl now points to the first hook chain node
+    ld (ix+wrCheckPage),b		; need these later when stepping through
+	ld (ix+wrCheckAddrL),l
+	ld (ix+wrCheckAddrH),h
+    
+    ex de,hl                        ; h is still 0 after this
+    ld l,(ix+wrHookBasepage)                        ; offset for head of chain
+    dec l                           ; the first offset is stored as 1 but it really needs to be 0 -- adjust everything back 1
+    push de                         ; [ptr in chain list] [ix] [ret addr]
+	add hl,hl                       ; multiply by 6 bytes per node
+    ld d,h
+    ld e,l
+    add hl,hl
+    add hl,de
+    pop de                          ; [ix] [ret addr]
+    ex de,hl
+    call BHL_plus_DE
+
+	; b:hl should be first hook in the chain we are interested in
+	
+	ld (ix+wrChainPage),b
+	ld (ix+wrChainAddrL),l
+	ld (ix+wrChainAddrH),h
+	
+	; finally should be done >:l
+	pop ix
+	scf
+	ccf				; make sure carry isn't set
+	ret
+
+	
+
+
+;	ChainNext: Pulls information about the next hook in the chain into RAM.
+;	IN: pointers initialized at workram
+;	OUT: ix+(4-7) contain base/hook page/addr of next hook in chain, pointers updated, OR
+;		carry flag: end of chain
+;	DESTROYS: af, bc, de, hl
+ChainNext:
+	push ix				; [ix] [ret addr]
+	ld ix,workram
+	ld b,(ix+wrChainPage)
+	ld l,(ix+wrChainAddrL)
+	ld h,(ix+wrChainAddrH)
+	call ChainFetchByte	; chain number/end-of-chain flag byte
+	ld a,c
+	inc a				; end-of-chain marker is $FF
+	jr nz,+_
+	; end of the chain
+	pop ix
+	scf
+	ret
+	
+_:
+	call ChainFetchByte
+	ld (ix+wrHookBasepage),c
+	call ChainFetchByte
+	ld (ix+wrHookHookpage),c
+	call ChainFetchWord
+	inc de						; step past the $83 / add a,e   check byte
+	ld (ix+wrHookAddrL),e
+	ld (ix+wrHookAddrH),d
+	call ChainFetchByte			; we don't need the value returned by this anywhere, just to advance pointers
+	; save pointers back
+	ld (ix+wrChainPage),b
+	ld (ix+wrChainAddrL),l
+	ld (ix+wrChainAddrH),h
+	pop ix
+	scf
+	ccf				; make sure carry isn't set
+	ret
+
+
+
+;	ChainVerify: Check the byte pointed to by the next hook to make sure it is still the signature $83.
+;	IN: workram pointers set up properly
+;	OUT: zero (not carry!) clear if hook valid, set if not
+;	DESTROYS: af, bc, hl
+ChainVerify:
+	push ix
+	ld ix,workram
+	ld b,(ix+wrHookHookpage)
+	ld l,(ix+wrHookAddrL)
+	ld h,(ix+wrHookAddrH)
+	dec hl						; and we need to step back again so we are pointing to the check byte
+	bcall(_LoadCIndPaged)
+	ld a,c
+	cp $83
+	pop ix
+	ret
+
+
+
+;	ChainGetRelatives: Get all other hooks from the same app as the next in the chain and
+;		load them into the RAM blocks.
+;		Also loads the next hook into the ram block for the active hook.
+;	IN: workram pointers set up properly - wrCheck*, wrHookBasepage
+;	OUT: Nothing
+;	DESTROYS: fixme
+ChainGetRelatives:
+	push ix
+	ld ix,workram
+	ld b,(ix+wrCheckPage)
+	ld l,(ix+wrCheckAddrL)
+	ld h,(ix+wrCheckAddrH)
+	
+_:
+	call ChainFetchByte			; hook num
+	ld a,c
+	cp $FE
+	jr z,cgrDone
+	call ChainFetchByte			; basepage
+	ld e,a
+	ld a,c
+	cp (ix+wrHookBasepage)		; optimize this for speed later, this is dirt slow but saves a reg
+	jr z,+_
+	; skip 4 bytes
+	call ChainFetchWord
+	call ChainFetchWord
+	jr -_						; go to next node
+	
+_:	; this node is on the same page, load it up into the ram block
+	; e is hook num
+	ld d,0
+	sla e		; mul by 2
+	push hl
+	ld hl,HookInfoLUT
+	add hl,de
+	; hl points to the LUT entry for this hook
+	;bcall(_LdHLInd)
+	call LdHLInd
+	inc hl
+	;bcall(_LdHLInd)
+	call LdHLInd
+	
+	ld a,i
+	push af				; store iff2
+	di
+	
+	; now HL points to the RAM block
+	; need to put address then page
+	; which just so happens to be backwards from the chain
+	; this can probably be optimized a bit ... but this should work
+	ex de,hl
+	pop hl
+	call ChainFetchByte		; hook page
+	push bc
+	call ChainFetchByte		; low addr
+	ld a,c
+	ld (de),a
+	inc de
+	call ChainFetchByte		; high addr
+	ld a,c
+	ld (de),a
+	inc de
+	ld a,b
+	pop bc
+	ld b,a
+	ld a,c
+	ld (de),a
+	call ChainFetchByte		; app id, throw it away
+
+	pop af
+	jp po,+_
+	ei
+_:
+
+cgrDone:
+	pop ix
+	ret
+
+
+
+
+;	ChainRestoreHooks: Restores hooks loaded by ChainGetRelatives.
+;		Actually, just forcibly reloads all of our hooks.
+;	IN: Nothing
+;	OUT: Nothing
+;	DESTROYS: ALL
+ChainRestoreHooks:
+	; can't indiscriminately restore all of our hooks in case some aren't needed,
+	; as some hooks can't be stubbed away very easily
+	; probably should step through configuration appvar, looking for hooks we are
+	; supposed to be managing. of course that means the infrastructure for the
+	; configuration appvar has to be in place before this can be implemented...
+	call ChainGetConfig
+	jp c,crhOhCrap
+	;push ix
+	;ld ix,workram+5			; we don't care about the signature
+	ld a,(workram+5)
+	ld b,a
+	
+	; I can't really think of a way to wrap this up into a loop.
+	; Any suggestions would be much appreciated.
+	
+	bit 0,b
+	jr z,+_
+	xor a
+	call installHook
+_:	bit 1,b
+	jr z,+_
+	ld a,1
+	call installHook
+_:	bit 2,b
+	jr z,+_
+	ld a,2
+	call installHook
+_:	bit 3,b
+	jr z,+_
+	ld a,3
+	call installHook
+_:	bit 4,b
+	jr z,+_
+	ld a,4
+	call installHook
+_:	bit 5,b
+	jr z,+_
+	ld a,5
+	call installHook
+_:	bit 6,b
+	jr z,+_
+	ld a,6
+	call installHook
+_:	bit 7,b
+	jr z,+_
+	ld a,7
+	call installHook
+	
+_:	ld a,(workram+6)
+	ld b,a
+	bit 0,b
+	jr z,+_
+	ld a,8
+	call installHook
+_:	bit 1,b
+	jr z,+_
+	ld a,9
+	call installHook
+_:	bit 2,b
+	jr z,+_
+	ld a,10
+	call installHook
+_:	bit 3,b
+	jr z,+_
+	ld a,11
+	call installHook
+_:	bit 4,b
+	jr z,+_
+	ld a,12
+	call installHook
+_:	bit 5,b
+	jr z,+_
+	ld a,13
+	call installHook
+_:	bit 6,b
+	jr z,+_
+	ld a,14
+	call installHook
+_:	bit 7,b
+	jr z,+_
+	ld a,15
+	call installHook
+
+_:	ld a,(workram+7)
+	ld b,a
+	bit 0,b
+	jr z,+_
+	ld a,16
+	call installHook
+_:	bit 1,b
+	jr z,+_
+	ld a,17
+	call installHook
+_:	bit 2,b
+	jr z,+_
+	ld a,18
+	call installHook
+_:	bit 3,b
+	jr z,+_
+	ld a,19
+	call installHook
+_:	bit 4,b
+	jr z,+_
+	ld a,20
+	call installHook
+_:	bit 5,b
+	jr z,+_
+	ld a,21
+	call installHook
+_:	bit 6,b
+	jr z,+_
+	ld a,22
+	call installHook
+_:	
+	; ugh. what a waste of space.
+	
+	
+	
+	;pop ix
+	ret
+
+
+	; Couldn't load the config appvar for some reason, either not there or bad version
+	; At the very least we can't reload our hooks, and maybe we should disable all the
+	; other hooks as well.
+crhOhCrap:
+	; FIXME -- should do something here, I think. Or maybe just fail silently. I don't know.
+	ret
+
+
+;	ChainGetConfig: Loads the configuration appvar HMConfig to workram.
+;	IN: Nothing
+;	OUT: workram: data section of HMConfig appvar
+;		carry flag: Can't find config appvar. Can't really restore our hooks in that case.
+;			Turn all hooks off?
+;	DESTROYS: Everything
+ChainGetConfig:
+	push ix				; [ix] [ret addr]
+	ld ix,workram
+	ld hl,AV_HMConfig
+	rst 20h				; rMOV9TOOP1
+	bcall(_ChkFindSym)
+	jr nc,+_
+	; not found
+	pop ix
+	ret
+_:
+	ld a,b			; page
+	or a
+	jr nz,+_		; in archive
+	; in ram, just copy from where it is to workram
+	; this will need reworking when there's another version of the config appvar =\
+	inc de
+	inc de				; get past size bytes
+	; size of a version 0 appvar is 5+3 (sig+flags)
+	; de is source
+	ld hl,workram
+	ex de,hl
+	push bc		; needed? probably not, can kill it later
+	ldi
+	ldi			;2
+	ldi
+	ldi			;4
+	ldi
+	ldi			;6
+	ldi			; faster to unroll
+	ldi			;8
+	pop bc
+	jr cgcCheckSig
+_:
+	; it's in archive, yay, happy fun time
+	ex de, hl			; I *think* not doing first ex de,hl, and putting 20 into hl, may work
+	ld de,20			; skip over data valid flag, data length, symbol entry copy,
+	call BHL_plus_DE	; name length, type byte, and name, to point to data
+	ld a,8
+	; ix is still workram
+_:
+	call LoadCIndPaged_inc
+	ld (ix+0),c
+	inc ix
+	dec a
+	jr nz,-_
+	ld ix,workram
+	
+	
+cgcCheckSig:
+	; now check the signature to make sure it's a valid chain
+	; de will point to the sig we are looking for,
+	; ix to the sig we are checking
+	ld de,Sig_HMConfig
+	
+	;1
+	ld a,(de)
+	cp (ix+0)
+	jr nz,+_
+	inc de
+	;2
+	ld a,(de)
+	cp (ix+1)
+	jr nz,+_
+	inc de
+	;3
+	ld a,(de)
+	cp (ix+2)
+	jr nz,+_
+	inc de
+	;4
+	ld a,(de)
+	cp (ix+3)
+	jr nz,+_
+	inc de
+	;5
+	ld a,(de)
+	cp (ix+4)
+	jr z,++_
+	
+_:
+	; the sig was bad, can't use it, bail out
+	pop ix
+	scf
+	ret
+
+_:
+	; workram+5 - workram+7 are the flags now
+	pop ix
+	scf
+	ccf
+	ret
+
+
+
+;	ChainFetchByte: Reads a byte from b:hl into c. If HMChains is not archived (0,(ix+0) is set),
+;		just copies byte from (hl) to c.
+;	IN: b:hl: page:addr of byte to read
+;		0,(ix+0): If 1, byte is read directly from (hl)
+;	OUT: c: byte read
+;		b:hl++, with page wrapping if needed
+;	DESTROYS: none
+ChainFetchByte:
+	bit wrFlagRAM,(ix+wrFlags)
+	jp z,LoadCIndPaged_inc		; just hand off execution to that routine
+	; isn't archived, just move a byte
+	ld c,(hl)
+	inc hl
+	ret
+
+
+;	ChainFetchWord: Reads a word from b:hl into de. If HMChains is not archived (0,(ix+0) is set),
+;		just copies word from (hl) to de.
+;	IN: b:hl: page:addr of word to read
+;		0,(ix+0): If 1, word is read directly from (hl)
+;	OUT: de: word read
+;		b:hl+=2, with page wrapping if needed
+;	DESTROYS: none
+ChainFetchWord:
+	bit wrFlagRAM,(ix+wrFlags)
+	jp z,LoadDEIndPaged_inc		; just let that do its thing
+	; in RAM, just read from there
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	inc hl
+	ret
+
+
+
+

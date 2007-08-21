@@ -1,0 +1,290 @@
+;    HookMan - System Hook Manager for TI-83+ Series.
+;    Copyright (C) 2007  Andy Janata
+;
+;    This program is free software; you can redistribute it and/or modify
+;    it under the terms of the GNU General Public License as published by
+;    the Free Software Foundation; either version 2 of the License, or
+;    (at your option) any later version.
+;
+;    This program is distributed in the hope that it will be useful,
+;    but WITHOUT ANY WARRANTY; without even the implied warranty of
+;    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;    GNU General Public License for more details.
+;
+;    You should have received a copy of the GNU General Public License along
+;    with this program; if not, write to the Free Software Foundation, Inc.,
+;    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+;
+;	 You can contact the author via electronic mail at <ajanata@gmail.com>,
+;	 or by writing to Andy Janata, 178 E. 5th St., Brewster, OH 44613 USA.
+;
+;
+;	You should use Spencer's Assembler (spasm) to assemble this. It may or
+;	may not work in other assemblers.
+;	Wabbitsign is recommended to generate the .8xk file.
+
+
+; TI-83+ Applications are run in the second memory bank, from $4000 to $7FFF.
+.org $4000
+; The 128-byte header required of all applications. Contains name and version
+; information.
+#include "header.inc"
+; The standard include file, modified slightly for use with this assembler.
+#include "ti83plus.inc"
+; More equates not found in ti83plus.inc.
+#include "equates.inc"
+
+
+start:
+
+	; see if the config appvar exists
+	ld hl,AV_HMConfig
+	rst 20h		; rMOV9TOOP1
+	bcall(_ChkFindSym)
+	jr nc,start2
+	; config appvar not found - show license and make it
+	; possibly show brief description as well
+	call aboutLicense
+
+	call cls
+	ld hl,msgWait
+	call PutS
+	
+	; now make the appvar
+	call cfgCreate
+	jr nc,start3		; no need to verify the variable we just created
+	
+	; not enough memory for the appvar
+varLowRam:
+	call cls
+	ld hl,errLowMem
+	call PutS
+	bcall(_GetKey)
+	jp exit	
+	
+	; config appvar exists, make sure it's valid
+start2:
+	call cls
+	ld hl,msgWait
+	call PutS
+
+	call cfgToAppData
+	jr nz,start3
+	; config appvar isn't valid
+	call cls
+	ld hl,errBadVar
+	call PutS
+	ld hl,$0001
+	ld (curRow),hl
+	ld hl,str_HMConfig
+	call PutS
+	bcall(_GetKey)
+	jp exit
+
+
+start3:
+	; config appvar is ok, check database
+
+	ld hl,AV_HMDatBas
+	rst 20h
+	bcall(_ChkFindSym)
+	jr nc,+_
+	call dbCreate
+	jr nc,+_
+	
+	; not enough ram
+	jr varLowRam
+	
+_:
+	; check to make sure it's valid
+	call dbHeadToappData
+	jr nz,start4
+	; database appvar isn't valid
+	call cls
+	ld hl,errBadVar
+	call PutS
+	ld hl,$0001
+	ld (curRow),hl
+	ld hl,str_HMDatbas
+	call PutS
+	bcall(_GetKey)
+	jp exit
+
+start4:
+	call ScanForHooks		; this crashes for some reason when HMDatbas is in RAM
+	
+	
+mainMenu:
+	call cls
+	set textInverse,(iy+textFlags)
+	ld hl,titleHookman
+	call PutS
+	res textInverse,(iy+textFlags)
+	
+	ld hl,$0905
+	ld (penCol),hl		; sets both penCol and penRow at the same time
+	ld hl,menuNumbers+(3*1)
+	call VPutS
+	ld hl,$1005
+	ld (penCol),hl
+	ld hl,menuNumbers+(3*2)
+	call VPutS
+	ld hl,$1705
+	ld (penCol),hl
+	ld hl,menuNumbers+(3*3)
+	call VPutS
+	ld hl,$1E05
+	ld (penCol),hl
+	ld hl,menuNumbers+(3*4)
+	call VPutS
+	ld hl,$2505
+	ld (penCol),hl
+	ld hl,menuNumbers+(3*5)
+	call VPutS
+
+	; put the text after the numbers
+	ld hl,$0910
+	ld (penCol),hl
+	
+	call AnyHooksInstalled
+	jr z,+_
+	ld hl,itemUninstall
+	jr ++_
+_:
+	ld hl,itemInstall
+_:
+	call VPutS
+	ld hl,$1010
+	ld (penCol),hl
+	ld hl,itemAdvanced
+	call VPutS
+	ld hl,$1710
+	ld (penCol),hl
+	ld hl,itemHelp
+	call VPutS
+	ld hl,$1E10
+	ld (penCol),hl
+	ld hl,itemAbout
+	call VPutS
+	ld hl,$2510
+	ld (penCol),hl
+	ld hl,itemExit
+	call VPutS
+	
+	; copyright string
+	ld hl,$3900
+	ld (penCol),hl
+	ld hl,txtCopyright
+	call VPutSC
+
+
+_:
+	bcall(_GetKey)
+	cp kClear
+	jr z,exit
+	cp kQuit
+	jr z,exit
+	sub k1
+	jp z,InstallUninstall
+	dec a					; 2
+	jp z,Advanced
+	dec a					; 3
+	jp z,helpMenu
+	dec a					; 4
+	jp z,About
+	dec a					; 5
+	jr z,exit
+	jr -_
+
+
+
+helpMenu:
+	; stub for keys for the time being
+menuStub:
+	call cls
+	ld hl,asdf
+	call PutS
+	bcall(_GetKey)
+	jp mainMenu
+
+asdf: .db "Not implemented",0
+
+
+
+exit:
+	call cls
+	ld hl,msgWait
+	call PutS
+	
+	; make sure all of our appvars are archived
+	ld hl,AV_HMConfig
+	rst 20h
+	bcall(_ChkFindSym)
+	jr c,+_
+	ld a,b
+	or a
+	jr nz,+_
+	call SafeArc
+_:
+	ld hl,AV_HMDatbas
+	rst 20h
+	bcall(_ChkFindSym)
+	jr c,+_
+	ld a,b
+	or a
+	jr nz,+_
+	call SafeArc
+_:
+	ld hl,AV_HMChains
+	rst 20h
+	bcall(_ChkFindSym)
+	jr c,+_
+	ld a,b
+	or a
+	jr nz,+_
+	call SafeArc
+_:	
+	
+	; Go back through the config appvar and make sure our hooks are installed.
+	call ChainRestoreHooks
+	call cls
+	bjump(_JForceCmdNoChar)
+
+
+
+
+; Since these include executable code or data, they cannot be included at the start of
+; the app, otherwise the code in them would be executed when the app is started!
+
+
+; About menu
+#include "about.z80"
+
+; Advanced menu and chain editor
+#include "advanced.z80"
+
+; Routines for manipulating the configuration appvar
+#include "configappvar.z80"
+
+; Routines for manipulating the hook chain appvar
+#include "chainsappvar.z80"
+
+; Routines for manipulating the application database appvar
+#include "databaseappvar.z80"
+
+; Our implementation of every hook.
+#include "hooks.z80"
+
+; Routines to install and uninstall our hooks.
+#include "installuninstall.z80"
+
+; General subroutines (ie, string printing, variable management, etc.).
+#include "routines.z80"
+
+
+
+; Constant data (user interface strings, variable names, etc.).
+#include "strings.inc"
+
+; Hook information database.
+#include "hooklist.inc"

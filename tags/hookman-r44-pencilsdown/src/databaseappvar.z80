@@ -1,0 +1,711 @@
+;    HookMan - System Hook Manager for TI-83+ Series.
+;    Copyright (C) 2007  Andy Janata
+;
+;    This program is free software; you can redistribute it and/or modify
+;    it under the terms of the GNU General Public License as published by
+;    the Free Software Foundation; either version 2 of the License, or
+;    (at your option) any later version.
+;
+;    This program is distributed in the hope that it will be useful,
+;    but WITHOUT ANY WARRANTY; without even the implied warranty of
+;    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;    GNU General Public License for more details.
+;
+;    You should have received a copy of the GNU General Public License along
+;    with this program; if not, write to the Free Software Foundation, Inc.,
+;    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+;
+;	 You can contact the author via electronic mail at <ajanata@gmail.com>,
+;	 or by writing to Andy Janata, 178 E. 5th St., Brewster, OH 44613 USA.
+
+
+;	Routines for accessing the hook database appvar.
+
+
+
+	
+;	dbHeadToappData: Copies the hook database appvar's signature and offset table to (appData).
+;	IN: None.
+;	OUT: zero: appvar not found or signature invalid.
+;	DESTROYS: FIXME
+dbHeadToappData:
+	ld hl,AV_HMDatbas
+	rst 20h
+	bcall(_ChkFindSym)
+	jr nc,+_
+	xor a				; appvar not found, return with zero set
+	ret
+_:
+	xor a
+	cp b
+	jr z,+_			; appvar is in ram, just copy it
+	
+	; archived so flashtoram it
+	ex de, hl			; I *think* not doing first ex de,hl, and putting 20 into hl, may work
+	ld de,20			; skip over data valid flag, data length, symbol entry copy,
+	call BHL_plus_DE_force	; name length, type byte, and name, to point to data
+	ld a,b
+	ld bc,6				; 5 byte signature + 1 count byte
+	ld de,appData
+	bcall(_FlashToRAM)
+	jr ++_
+
+_:
+	ex de,hl
+	inc hl
+	inc hl
+	ld de,appData
+	ld bc,6
+	ldir				; 5 byte signature + 1 count byte
+_:			
+	; (appData) contains the start of the signature
+	ld de,appData
+	ld hl,Sig_HMDatbas
+	call CheckSig
+	ret z				; bad sig
+	
+	; now get the rest of the header
+	; (appData+5) is the number of entries in the offset table
+	ld hl,AV_HMDatbas
+	rst 20h
+	bcall(_ChkFindSym)
+	jr nc,+_
+	xor a				; appvar not found, return with zero set
+	ret
+_:
+	xor a
+	cp b
+	jr z,+_			; appvar is in ram, just copy it	
+	
+	; archived so flashtoram it
+	ex de, hl			; I *think* not doing first ex de,hl, and putting 20 into hl, may work
+	ld de,26			; skip over data valid flag, data length, symbol entry copy,
+	call BHL_plus_DE_force	; name length, type byte, name, and what we already copied to point to data
+	ld a,b
+	push af
+	ld a,(appData+5)
+	add a,a				; we need to skip over X words
+	jr z,++_			; skip all of this if there is nothing to load, _FlashToRam doesn't like bc=0
+	ld c,a
+	ld b,0
+	pop af
+	ld de,appData+6
+	bcall(_FlashToRAM)
+	jr ++_
+
+_:
+	; in RAM so just copy it
+	ld hl,8				; skip size and sig and count
+	add hl,de
+	ld de,appData+6
+	ld a,(appData+5)
+	add a,a				; we need to skip over X words
+	ld b,0
+	ld c,a
+	ldir
+_:
+	; now the sig and offset table are in appData
+	xor a
+	inc a			; make sure zero is reset
+	ret
+	
+	
+	
+	
+
+
+;	dbCreate: Creates the hook database appvar HMDatbas.
+;		Checks to make sure enough memory is available for an empty database.
+;	IN: none
+;	OUT: HMDatbas created with no entries.
+;		carry: not enough ram
+;	DESTROYS: all (FIXME?)
+dbCreate:
+	; check to make sure we have enough memory for the appvar
+	ld hl,23			; I think this is right
+	bcall(_EnoughMem)
+	ret c
+	
+	ld hl,AV_HMDatbas
+	rst 20h			; rMOV9TOOP1
+	ld hl,6			; empty database appvar is currently 6 bytes of data
+	bcall(_CreateAppVar)
+	ld hl,Sig_HMDatbas
+	inc de
+	inc de			; get past size bytes
+	ldi
+	ldi
+	ldi				; 5 bytes of signature
+	ldi
+	ldi
+	xor a
+	ld (de),a		; 0 byte for no entries in table
+	ld hl,AV_HMDatbas
+	rst 20h			; rMOV9TOOP1
+	call SafeArc
+	scf
+	ccf
+	ret
+
+
+
+
+;	ScanForHooks: Scans all of the hook memory blocks and adds new hooks to the database.
+;		Holy hell is this confusing. If this works right the first time...
+;		As a safety precaution, any time a hook is added, this routine is re-started from the
+;		beginning (as that changes the size of the appvar and I don't want anything to get confused).
+;		FIXME: Crashes when HMDatbas is in RAM.
+;	IN: none
+;	OUT: zero: HMDatbas does not exist or signature does not match
+;		carry: insufficient memory to add to database
+;	DESTROYS: All
+ScanForHooks:
+	bcall(_ClrLCDFull)
+	ld hl,0
+	ld (curRow),hl
+	ld hl,msgScanning
+	call PutS
+
+
+;	go here when restarting the routine
+ScanForHooks_restart:
+
+	call dbHeadToappData
+	ret z
+	ld hl,AV_HMDatbas
+	rst 20h
+	bcall(_ChkFindSym)
+	ld a,b
+	or a
+	jr z,sfhInRam
+	
+	ld hl,+_
+	call APP_PUSH_ERRORH
+	ld hl,AV_HMDatbas
+	rst 20h
+	bcall(_Arc_Unarc)
+	call APP_POP_ERRORH
+	jr sfhInRam
+	
+_:
+	; unarc failed for some reason, probably insufficient memory
+	scf
+	ret
+	
+	; HMDatbas should be in RAM now
+sfhInRam:
+	
+	bcall(_FillBasePageTable)		; we need this later when we find hooks
+	
+	; order for each iteration:
+	;	- get to our hook info block
+	;	- check to see if the hook is enabled
+	;	- if it isn't, loop
+	;	- get the base page then the name
+	;	- search for that name in the database
+	;	- create name if needed
+	;	- see if name has that hook already, add if not
+	;	- loop
+	
+	ld hl,AV_HMDatbas
+	rst 20h
+	bcall(_ChkFindSym)
+	ld hl,8				; 2 size + 5 sig + 1 number of entries
+	add hl,de
+	ld a,(appData+5)
+	add a,a
+	ld e,a
+	ld d,0
+	add hl,de			; hl points to the entry after the offset table
+	ld (MD5Hash),hl
+	
+	ld a,MAX_HOOK
+
+sfhLoop:
+	call PrintDot
+	push af				; [hook num] [ret]
+	add a,a				; mul by two for offset into LUT
+	ld hl,HookInfoLUT
+	ld d,0
+	ld e,a
+	add hl,de			; hl points into hook info LUT
+	call LdHLInd		; hl points to start of hook info block
+	inc hl				; ... OS hook block
+	push hl				; [hook info ptr] [hook num] [ret]
+	inc hl
+	inc hl				; flags offset for hook installed
+	ld e,(hl)			; d still 0, now de is flags offset
+	inc hl
+	ld b,(hl)			; b is bitmask
+	ld hl,flags
+	add hl,de			; hl points to flag byte
+	ld a,(hl)
+	and b
+	jr nz,+_
+	; hook is inactive
+	pop hl				; hook info ptr [hook num] [ret]
+	jp sfhLoopBottom
+_:
+	
+	; hook is active
+	pop hl				; hook info ptr [hook num] [ret]
+	call LdHLInd
+	push hl				; [os hook block] [hook num] [ret]
+	; addrl addrh page pagecopy
+	inc hl
+	inc hl
+	ld a,(hl)
+	bcall(_GetAppBasePage)
+	; stick that at MD5Length for use later
+	ld (MD5Length),a
+	push af				; [basepage] [os hook block] [hook num] [ret]
+	
+	; check to see if we're looking at ourself...
+	ld b,a
+	in a,(6)
+	cp b
+	jr nz,+_
+	; we're looking at ourself... Not really useful. :)
+	; need to clean up the stack and go back to the main loop
+	pop bc				; kill 2 words
+	pop bc				; [hook num] [ret]
+	jp sfhLoopBottom
+	
+_:
+	
+	pop af
+	push af
+	ld hl,$4000
+	ld de,$8040			; app name field
+	bcall(_FindAppHeaderSubField)
+	; technically the name could not be found but that will not happen
+	pop af				; basepage [os hook block] [hook num] [ret]
+	; a:hl points to the name
+	inc hl				; get past field markers
+	inc hl
+	ld de,MD5Temp
+	ld bc,8
+	bcall(_FlashToRAM)
+	; MD5Temp is the name
+	
+	; now look for this name in the database
+	ld a,(appData+5)		; number of apps in the database so far
+	
+sfhFindAppLoop:
+	
+	or a
+	jp z,sfhFindAppLoopEnd
+	dec a					; first offset is actually right at the address we already have, and so on
+	push af					; [database offset] [os hook block] [hook num] [ret]
+	add a,a
+	ld e,a
+	ld d,0
+	ld hl,appData+6
+	add hl,de				; hl points to offset for next entry
+	call LdHLInd
+	ex de,hl
+	ld hl,(MD5Hash)			; first entry pointer
+	add hl,de
+	ld de,MD5Temp
+	ld bc,8
+	call StrCmp
+	jr z,sfh_fal_GotApp
+	; not the app we're looking for
+	pop af					; database offset [os hook block] [hook num] [ret]
+	;dec a					; we already did this earlier to adjust for the array base
+	jr sfhFindAppLoop
+
+
+sfh_fal_GotApp:
+	
+	; we found the app in there
+	; hl points to the last known basepage
+	; we don't really need that right now
+	inc hl
+	; we still have the loop counter from the last loop on the stack!
+	; now the number of hooks for the app in the database
+	ld a,(hl)
+	inc hl			; point to the first hook node
+	
+	; hook node: [hook num 1] [basepage offset 1] [address 2]
+	
+	; time for yet another nested for loop
+sfh_fal_FindHookLoop:
+	
+	or a
+	jr z,sfh_fal_fhl_End
+	push af				; [app offset] [database offset] [os hook block] [hook num] [ret]
+	
+	ex de,hl
+	ld hl,7				; the MSB of the hook num word (ie the hook num itself)
+	add hl,sp			; possible speed optimization here by doing this once earlier
+	ld a,(de)
+	cp (hl)				; see if this is the hook
+	jr z,sfh_fal_WeAlreadyHaveTheHook
+	ex de,hl
+	inc hl
+	inc hl
+	inc hl
+	inc hl
+	
+	pop af				; app offset [database offset] [os hook block] [hook num] [ret]
+	dec a
+	jr sfh_fal_FindHookLoop
+
+
+sfh_fal_WeAlreadyHaveTheHook:
+	; this is going to be a bitch to clean up....
+	; [app offset] [database offset] [os hook block] [hook num] [ret]
+	; need to get down to just the hook num and ret I think
+	; FIXME
+	pop bc				; kill 3 words
+	pop bc
+	pop bc				; [hook num] [ret]
+	jp sfhLoopBottom
+
+
+sfh_fal_fhl_End:
+	
+	; if we get to this point we looped through all of the hooks we know about for the app
+	; and didn't find it so we have to add it
+	
+	; [database offset] [os hook block] [hook num] [ret]
+	; hl points to where we need to insert for the hook
+	
+	; needs done:
+	;	- insert 4 bytes for the new hook
+	;	- increment the app's hook count
+	
+	push hl
+	ld hl,AV_HMDatbas
+	rst 20h
+	pop hl
+	ex de,hl
+	ld hl,4
+	call MyInsertMem
+	jr nc,+_
+	; not enough ram
+	pop bc
+	pop bc
+	pop bc
+	pop bc
+	ld hl,AV_HMDatbas
+	rst 20h
+	call SafeArc
+	scf
+	ret
+	
+_:
+	; we need to look up the appvar again
+	; still have the appvar name in OP1
+	
+	bcall(_ChkFindSym)
+	ld hl,7				; 2 size + 5 sig
+	add hl,de
+	ld b,(hl)			; we need this later
+	inc hl
+	ex de,hl
+	ld hl,1				; database offset
+	add hl,sp
+	ld a,(hl)
+	add a,a				; don't dec a, not needed
+	; now a is the database offset of the app we're adding to
+	ex de,hl
+	ld d,0
+	ld e,a
+	push hl
+	pop ix				; getting annoyed
+	add hl,de
+	push hl
+	pop de
+	call LdHLInd
+	push hl				; [app offset in data area] [database offset] [os hook block] [hook num] [ret]
+	
+	; need to move to the end of the offset table
+	push ix
+	pop hl				; grr
+	ld a,b
+	add a,a
+	ld d,0
+	ld e,a
+	add hl,de			; pointing to first app
+	
+	pop de				; app offset in data area [database offset] [os hook block] [hook num] [ret]
+	add hl,de			; pointing to the app
+	
+	ld e,9				; name and basepage
+	add hl,de
+	ld a,(hl)			; number of hooks
+	inc (hl)			; update
+	inc hl				; step past
+	add a,a				; don't need to dec a since we use the old count to start with
+	add a,a				; mul by 4 bytes/entry
+	ld e,a
+	add hl,de
+	ex de,hl
+	
+	
+	;de = new [database offset] [os hook block] [hook num] [ret]
+	ld hl,5				; hook number
+	add hl,sp
+	ldi					; put hook num into appvar
+	inc de				; ignore page offset for now, go to address
+	dec hl
+	dec hl
+	dec hl
+	dec hl				; os hook block
+	call LdHLInd
+	ldi					; put address into appvar
+	ldi
+	dec de
+	dec de
+	dec de				; back to page offset
+	ld a,(MD5Length)
+	sub (hl)			; get the page offset
+	ld (de),a
+
+
+	; clean up the stack so only the return address is left
+	pop bc
+	pop bc
+	pop bc
+	; now restart this routine
+	jp ScanForHooks_restart
+
+sfhFindAppLoopEnd:
+	
+	; if we get here we did not find the app in the database at all so we have to add both
+	; the app and the hook
+	; this will be nastier
+	
+	; [os hook block] [hook num] [ret]
+	; MD5Temp should still be the app's name
+	
+	; needs done:
+	;	- insert 2 bytes at the end of the offset table for the app
+	;	- calculate that value
+	;	- increment the length of the offset table
+	;	- insert 14 bytes at the end for the app and hook entries
+	; don't forget to take into account stuff moving!
+	
+	
+  ;di
+  ;halt
+	
+	; zeroth: make sure there's enough memory!
+	ld hl,16
+	bcall(_EnoughMem)
+	jr nc,+_
+	; not enough memory
+	pop bc
+	pop bc
+	ld hl,AV_HMDatbas
+	rst 20h
+	call SafeArc
+	scf
+	ret
+	
+_:
+	; first: put the offset in
+	; we need to do this to the appvar itself
+	ld hl,AV_HMDatbas
+	rst 20h
+	bcall(_ChkFindSym)
+	ld hl,7				; size and sig to point to offset table length
+	add hl,de
+	ld a,(hl)
+	inc (hl)			; increment offset table length
+	inc hl				; get past the offset table length
+	add a,a
+	ld d,0
+	ld e,a
+	add hl,de			; where to put the new offset
+	;ex de,hl
+	push hl				; [new offset] [os hook block] [hook num] [ret]
+	ld hl,AV_HMDatbas
+	rst 20h
+	pop de				; new offset [os hook block] [hook num] [ret]
+	ld hl,2
+	call MyInsertMem
+	jr nc,+_
+	; not enough mem -- though we shouldn't have any issues here since I checked beforehand
+	pop bc
+	pop bc
+	pop bc
+	ld hl,AV_HMDatbas
+	rst 20h
+	call SafeArc
+	scf
+	ret
+	
+_:
+	;pop de				; new offset [os hook block] [hook num] [ret]
+	;push de
+	
+	
+	; we have to look up the appvar again
+	ld hl,AV_HMDatbas
+	rst 20h
+	bcall(_ChkFindSym)
+
+	ld hl,7				; size and sig to point to offset table length
+	add hl,de
+	ld a,(hl)
+	inc hl				; point after the offset table length
+	dec a
+	push af				; [number of offsets] [os hook block] [hook num] [ret]
+	add a,a
+	ld d,0
+	ld e,a
+	add hl,de			; now we point to the new, empty offset
+	
+	pop af				; number of offsets [os hook block] [hook num] [ret]
+	or a
+	jr z,+_				; if there wasn't anything already there we need to skip this next bit
+	
+	; there is already something there so we need to figure out where to put this one
+	dec hl
+	dec hl
+	push hl
+	pop de
+	call LdHLInd		; get the offset of the last app
+	inc de
+	inc de
+	push de				; [new offset] [os hook block] [hook num] [ret]
+	inc de
+	inc de
+	add hl,de			; hl points to the last app node now
+	
+	; [app name 8] [app page 1] [num hooks 1] [hook nodes 4*num]
+
+	ld de,9
+	add hl,de			; hl is number of hooks for this app
+	ld a,(hl)
+	add a,a
+	add a,a				; mul by 4 bytes per hook node
+	inc a				; to get past the count byte
+	ld e,a
+	add hl,de			; now we point to where the new app goes
+	pop de				; where the offset goes
+	push de
+	inc de
+	inc de
+	or a				; clear carry
+	sbc hl,de			; the offset to the new app block
+	pop de				; new offset [os hook block] [hook num] [ret]
+	ex de,hl
+
+_:
+	ld (hl),e			; store the offset
+	inc hl
+	ld (hl),d
+	inc hl
+	add hl,de			; now we're at where we need to put the new app block
+	;ex de,hl			; de: where to put it
+	push hl				; [where to insert mem] [os hook block] [hook num] [ret]
+	ld hl,AV_HMDatbas
+	rst 20h				; I might not need to do that here
+	pop de				; where to insert mem [os hook block] [hook num] [ret]
+	ld hl,14
+	call MyInsertMem
+	jr nc,+_
+	; not enough mem
+	; FIXME
+	; though we shouldn't have any problems since I check before doing anything
+	
+	
+_:
+	
+	; we have to look the appvar up again
+	ld hl,AV_HMDatbas
+	rst 20h
+	bcall(_ChkFindSym)
+	ld hl,7
+	add hl,de			; get to the offset table length
+	ld a,(hl)
+	inc hl
+	dec a
+	add a,a
+	ld d,0
+	ld e,a
+	add hl,de			; now we are pointing to the offset
+	push hl
+	pop de				; need the address in both
+	inc de				; point after the table
+	inc de
+	call LdHLInd
+	add hl,de			; now we are pointing to this app's block
+	
+	
+	ex de,hl
+	
+	
+	; [os hook block] [hook num] [ret]
+	ld hl,MD5Temp
+	ld bc,8
+	ldir				; app name
+	ld a,(MD5Length)
+	ld (de),a			; basepage
+	inc de
+	ld a,1
+	ld (de),a			; number of hooks
+	inc de
+	; num page addrl addrh
+	pop hl				; os hook block [hook num] [ret]
+	pop af				; hook num [ret]
+	ld (de),a			; hook num
+	inc de
+	inc hl
+	inc hl				; point to hook page
+	ld a,(MD5Length)
+	sub (hl)			; get the page offset
+	ld (de),a
+	dec hl
+	dec hl
+	inc de
+	ldi
+	ldi
+	
+	
+	; done?!
+	
+	
+	; and when we're done we clean up the stack and restart this routine
+	; oh hey the stack is already cleaned up
+	
+	jp ScanForHooks_restart
+	
+	; if the hook was inactive we jump here from above otherwise we fall through
+sfhLoopBottom:
+	pop af				; hook num [ret]
+	or a
+	jr z,+_
+	dec a
+	jp sfhLoop
+_:
+	; we're done
+	; archive the appvar
+	ld hl,AV_HMDatbas
+	rst 20h
+	call SafeArc
+	ret
+	
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,132 @@
+;    HookMan - System Hook Manager for TI-83+ Series.
+;    Copyright (C) 2007  Andy Janata
+;
+;    This program is free software; you can redistribute it and/or modify
+;    it under the terms of the GNU General Public License as published by
+;    the Free Software Foundation; either version 2 of the License, or
+;    (at your option) any later version.
+;
+;    This program is distributed in the hope that it will be useful,
+;    but WITHOUT ANY WARRANTY; without even the implied warranty of
+;    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;    GNU General Public License for more details.
+;
+;    You should have received a copy of the GNU General Public License along
+;    with this program; if not, write to the Free Software Foundation, Inc.,
+;    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+;
+;	 You can contact the author via electronic mail at <ajanata@gmail.com>,
+;	 or by writing to Andy Janata, 178 E. 5th St., Brewster, OH 44613 USA.
+
+
+;	Routines for accessing the hook chain appvar.
+; 	These are only safe to use in "normal" parts of the application, not in hooks!
+;	They use RAM at will.
+
+
+;	cavHeaderToAppData: Copies the header and offset list from HMChains to appData.
+;	IN: none
+;	OUT: appData contains 5 + MAX_HOOK+1 bytes from HMChains
+;		zero: HMChains not found or invalid
+;	DESTROYS: all
+cavHeaderToAppData:
+	ld hl,AV_HMChains
+	rst 20h
+	bcall(_ChkFindSym)
+	jr nc,+_
+	xor a				; appvar not found, return with zero set
+	ret
+_:
+	xor a
+	cp b
+	jr z,chtadRam			; appvar is in ram, just copy it
+	
+	; archived so flashtoram it
+	ex de, hl			; I *think* not doing first ex de,hl, and putting 20 into hl, may work
+	ld de,20			; skip over data valid flag, data length, symbol entry copy,
+	call BHL_plus_DE_force	; name length, type byte, and name, to point to data
+	ld a,b
+	ld bc,5+MAX_HOOK+1		; 5 byte signature MAX_HOOK+1 entries in table
+	ld de,appData
+	bcall(_FlashToRAM)
+	jr +_
+
+chtadRam:
+	ex de,hl
+	inc hl
+	inc hl
+	ld de,appData
+	ld bc,5+MAX_HOOK+1
+	ldir				; 5 byte signature + 3 data bytes
+_:			
+	; (appData) contains the start of the signature
+	ld de,appData
+	ld hl,Sig_HMChains
+	jp CheckSig			; this can probably be done with StrCmp.... at any rate it'll return back
+	
+	
+	
+	
+;	cavCreate: Creates the hook chain list appvar HMChains.
+;		Checks to make sure enough memory is available.
+;	IN: none
+;	OUT: HMChains created and defaulted to no hooks for any chain
+;		carry: not enough ram
+;	DESTROYS: all
+cavCreate:
+	; check to make sure we have enough memory for the appvar
+	ld hl,17+5+MAX_HOOK+1+1			; 17 system + 5 sig + MAX_HOOK+1 hooks + 1 terminator
+	bcall(_EnoughMem)
+	ret c
+	
+	ld hl,AV_HMChains
+	rst 20h			; rMOV9TOOP1
+	ld hl,5+MAX_HOOK+1+1
+	bcall(_CreateAppVar)
+	ld hl,Sig_HMChains
+	inc de
+	inc de			; get past size bytes
+	ldi
+	ldi
+	ldi				; 5 bytes of signature
+	ldi
+	ldi
+	xor a
+	ld b,MAX_HOOK+1
+_:
+	ld (de),a
+	inc de
+	djnz -_
+	ld a,$FE
+	ld (de),a
+	
+	ld hl,AV_HMChains
+	rst 20h			; rMOV9TOOP1
+	call SafeArc
+	scf
+	ccf
+	ret
+
+
+;	calInvalid: Displays the "invalid variable" message for HMChains.
+;	IN: none
+;	OUT: Does not return. Jumps to exit.
+cavInvalid:
+	call cls
+	ld hl,errBadVar
+	call PutS
+	ld hl,$0001
+	ld (curRow),hl
+	ld hl,str_HMChains
+	call PutS
+	bcall(_GetKey)
+	jp exit
+
+
+
+
+
+
+
+
+

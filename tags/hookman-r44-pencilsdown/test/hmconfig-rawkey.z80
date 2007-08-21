@@ -1,0 +1,6 @@
+; This is a test HMConfig appvar file. It has the RawKey hook active, and nothing else.
+
+.db	"HMCF",0		; version byte, not terminator
+.db	%00000100
+.db	0
+.db	0

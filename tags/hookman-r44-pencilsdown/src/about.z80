@@ -1,0 +1,88 @@
+;    HookMan - System Hook Manager for TI-83+ Series.
+;    Copyright (C) 2007  Andy Janata
+;
+;    This program is free software; you can redistribute it and/or modify
+;    it under the terms of the GNU General Public License as published by
+;    the Free Software Foundation; either version 2 of the License, or
+;    (at your option) any later version.
+;
+;    This program is distributed in the hope that it will be useful,
+;    but WITHOUT ANY WARRANTY; without even the implied warranty of
+;    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;    GNU General Public License for more details.
+;
+;    You should have received a copy of the GNU General Public License along
+;    with this program; if not, write to the Free Software Foundation, Inc.,
+;    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+;
+;	 You can contact the author via electronic mail at <ajanata@gmail.com>,
+;	 or by writing to Andy Janata, 178 E. 5th St., Brewster, OH 44613 USA.
+
+
+;	This file handles the About menu.
+
+About:
+	ld hl,aboutMenu
+	call menu
+	dec a
+	jp z,aboutAbout
+	dec a
+	;jp z,aboutLicense
+	jp nz,mainMenu
+	
+	; aboutLicense is called from the init if the config appvar isn't found
+	; since we got to it this way we need a valid ret addr for it
+	; this is 6 t-states faster than call/ret from here, same size
+	ld hl,mainMenu
+	push hl
+aboutLicense:
+	bcall(_ClrLCDFull)
+	ld hl,$0000
+	ld (penCol),hl
+	ld b,9
+	ld hl,licenseText
+_:
+	call VPutSC
+	xor a
+	ld (penCol),a
+	ld a,(penRow)
+	add a,7
+	ld (penRow),a
+	djnz -_
+	
+	push hl
+	bcall(_GetKey)
+	bcall(_ClrLCDFull)
+	ld hl,$0000
+	ld (penCol),hl
+	pop hl
+	ld b,6
+	
+_:
+	call VPutSC
+	xor a
+	ld (penCol),a
+	ld a,(penRow)
+	add a,7
+	ld (penRow),a
+	djnz -_
+	
+	bcall(_GetKey)
+
+	ret
+	;jp mainMenu	
+
+
+
+aboutAbout:
+	jp menuStub
+
+
+	
+;	menu data block	
+aboutMenu:
+	.db "     About      ",0
+	.db 2
+	.db "About",0
+	.db "License",0
+
