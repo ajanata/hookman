@@ -37,7 +37,7 @@
 
 start:
 
-	; put initialization stuff here
+	; see if the config appvar exists
 	ld hl,AV_HMConfig
 	rst 20h		; rMOV9TOOP1
 	bcall(_ChkFindSym)
@@ -46,6 +46,9 @@ start:
 	; possibly show brief description as well
 	call aboutLicense
 
+	call cls
+	ld hl,msgWait
+	call PutS
 	
 	; now make the appvar
 	call cfgCreate
@@ -61,6 +64,10 @@ varLowRam:
 	
 	; config appvar exists, make sure it's valid
 start2:
+	call cls
+	ld hl,msgWait
+	call PutS
+
 	call cfgToAppData
 	jr nz,start3
 	; config appvar isn't valid
@@ -205,6 +212,10 @@ asdf: .db "Not implemented",0
 
 
 exit:
+	call cls
+	ld hl,msgWait
+	call PutS
+	
 	; make sure all of our appvars are archived
 	ld hl,AV_HMConfig
 	rst 20h
