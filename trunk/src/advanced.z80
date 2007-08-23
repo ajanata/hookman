@@ -51,6 +51,7 @@ ScrollPos			.equ	0
 SelectedItem		.equ	1
 DrawnItems			.equ	2
 TotalItems			.equ	3						; this is only used on single chain editors
+EditingChain		.equ 	4
 
 TempString			.equ	MD5Buffer				; 64 bytes for temporary strings (MD5Length and MD5Hash)
 
@@ -59,6 +60,9 @@ HookList			.equ	HookListPtr+2			; 30 bytes for pointers to hooks for currently e
 													; note the editor will break with more than *29* apps with the same kind of hook
 OrderedHookListPtr	.equ	HookList+30
 OrderedHookList		.equ	OrderedHookListPtr+2
+
+ActiveHookFlagsPtr	.equ	OrderedHookList+30		; nonzero - hook active
+ActiveHookFlags		.equ	ActiveHookFlagsPtr+2	; 0 - hook inactive - for UI checkboxes
 
 
 ; small font characters for [un]selected options
@@ -325,10 +329,12 @@ _:
 	xor a
 	ld (hl),a
 	ld de,HookList+1
-	ld bc,61
+	ld bc,ActiveHookFlags+30-HookList
 	ldir						; clear out that area
 	ld hl,OrderedHookList
 	ld (OrderedHookListPtr),hl
+	ld hl,ActiveHookFlags
+	ld (ActiveHookFlagsPtr),hl
 	
 	ld hl,(DbOffsetTable)
 	ld a,(hl)
@@ -418,6 +424,11 @@ ce_ec_OrderHooks:
 	ld (hl),a
 	inc hl
 	ld (OrderedHookListPtr),hl
+	; flag it as already being active
+	ld hl,(ActiveHookFlagsPtr)
+	ld (hl),a						; a is non-zero and that's all we need
+	inc hl
+	ld (ActiveHookFlagsPtr),hl
 	; remove from unordered list
 	; find it first
 	ld hl,HookList
@@ -463,31 +474,136 @@ ce_ec_DoneOrdering:
   ;halt
   
 	; ok so now OrderedHookList has the hooks in order starting with the active ones
+	; and ActiveHookFlags has non-zero for active hooks
 	
 	
-	
-	
-	
-	
+	call cls
+	ld hl,0
+	ld (penCol),hl
+	ld hl,msgEditChain
+	call VPutS
 	
 	ld a,(ix+SelectedItem)
+	ld (ix+EditingChain),a
+	;FIXME: need to figure out the total items somehow
+	ld a,2
 	ld (ix+TotalItems),a
-	
-	
 	ld (ix+ScrollPos),0
 	ld (ix+SelectedItem),0
 	
 	
 ce_ec_Redraw:
 	ld (ix+DrawnItems),0
+	call ClearAllButTop
+	ld hl,$0700
+	ld (penCol),hl
+
+  ;di
+  ;halt
+
+ce_ec_r_Loop:
+	; see if this is the selected item
+	ld a,(ix+DrawnItems)
+	add a,(ix+ScrollPos)
+	cp (ix+SelectedItem)
+	jr nz,+_
+	; it is so turn inverse on
+	set textInverse,(iy+textFlags)
+_:
+	; put the crap to get the string for this item here
+	ld hl,ActiveHookFlags
+	ld d,0
+	ld e,(ix+DrawnItems)
+	add hl,de
+	xor a
+	cp (hl)
+	jr z,+_
+	; item is inactive
+	ld a,Unchecked
+	jr ++_
+_:
+	; item is active
+	ld a,Checked
+_:
+	ld hl,TempString
+	ld (hl),a
+	inc hl
+	ld a,' '
+	ld (hl),a
+	
+	; need to get the app's name
+	
+
+
+	inc hl
+	xor a
+	ld (hl),a
+	ld hl,TempString
+	call VPutS_ix
+	; see if this is the selected item
+	ld a,(ix+DrawnItems)
+	add a,(ix+ScrollPos)
+	cp (ix+SelectedItem)
+	jr nz,+_
+	; it is so turn inverse off
+	res textInverse,(iy+textFlags)
+_:
+	xor a
+	ld (penCol),a
+	ld a,(penRow)
+	add a,6
+	ld (penRow),a
+	inc (ix+DrawnItems)
+	ld a,(ix+TotalItems)	; check to see if there are fewer items than fill the screen
+	cp (ix+DrawnItems)
+	jr z,ce_ec_KeyLoop		; there are so go to the key loop
+	ld a,9					; check if the screen is full
+	cp (ix+DrawnItems)
+	jp nz,ce_ec_r_Loop
 	
 	
+	; display scroll arrows
+	ld a,(ix+ScrollPos)
+	or a
+	jr z,+_
+	; draw up arrow
+	ld hl,$0F01
+	ld (curRow),hl
+	ld a,$1E			; up arrow
+	bcall(_PutC)
+_:
+	ld a,(ix+ScrollPos)
+	sub 8
+	cp (ix+TotalItems)
+	jr z,+_
+	; draw down arrow
+	ld hl,$0F07
+	ld (curRow),hl
+	ld a,$1F			; down arrow
+	bcall(_PutC)
+_:
+
+ce_ec_KeyLoop:
+	
+  di
+  halt
 	
 	
-	
+	; need to handle up and down for changing selection,
+	; scrolling as needed,
+	; + and - to move items up and down
+	; enter to toggle active
+	; and eventually alpha+up/down for page jumping
 	
 	
 	jp ChainEditorRestart
+
+
+
+
+
+
+
 
 
 
