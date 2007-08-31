@@ -530,12 +530,38 @@ _:
 	inc hl
 	ld a,' '
 	ld (hl),a
+	inc hl
 	
 	; need to get the app's name
+	; FIXME
+
+  di
+  halt
+
+	push hl					; [temp string]
+	ld hl,OrderedHookList							; FIXME: there seems to be a bug in the ordering routine. These are shifted 2 spots up from where they should be
+	ld d,0
+	ld e,(ix+DrawnItems)
+	add hl,de				; get offset of this app
+	ld a,(hl)
+	add a,a					; double to a word offset
+	ld e,a
+	ld hl,(DbOffsetTable)
+	inc hl
+	add hl,de				; hl points to app offset
+	call LdHLInd
+	ex de,hl
+	ld hl,(DbFirstEntry)
+	add hl,de				; hl points to start of app entry
+	pop de					; temp string
+	ld bc,8
+	ldir
+	ex de,hl
+
 	
 
 
-	inc hl
+	;inc hl
 	xor a
 	ld (hl),a
 	ld hl,TempString
